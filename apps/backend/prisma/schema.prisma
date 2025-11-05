@@ -5,11 +5,194 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       BigInt   @id @default(autoincrement())
+  email                    String   @unique
+  password_hash            String
+  first_name               String
+  last_name                String
+  phone                    String
+  country_name             String
+  city_name                String
+  street_name              String
+  building_number          Int?
+  apartment_house_number   Int?
+  floor_number             Int?
+  description              String?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @default(now())
+
+  Worker                   Worker?
+  MediaAssets              MediaAsset[]
+  RatingsAuthored          Rating[] @relation("rating_rater")
+  OrdersAsCustomer         Order[] @relation("orders_as_customer")
+
+  @@index([email])
+}
+
+model Worker {
+  id                     BigInt @id
+  user                   User   @relation(fields: [id], references: [id], onDelete: Cascade)
+  is_professional        Boolean  @default(false)
+  pickup_available       Boolean  @default(false)
+  delivery_available     Boolean  @default(false)
+  description            String?
+  image_url              String?
+
+  Services               WorkerService[]
+  RatingsReceived        Rating[] @relation("rating_worker")
+  Hours                  WorkerBusinessHours[] @relation("WorkerHours")
+  Orders                 Order[] @relation("orders_as_worker")
+}
+
+model WorkerBusinessHours {
+  worker_id   BigInt
+  day_of_week Int        // 0=Sunday .. 6=Saturday
+  start_hhmm  String     // "09:00"
+  end_hhmm    String     // "19:00"
+
+  Worker Worker @relation("WorkerHours", fields: [worker_id], references: [id], onDelete: Cascade)
+
+  @@id([worker_id, day_of_week, start_hhmm])
+}
+
+model ServiceCatalog {
+  service_code                  String   @id
+  display_name                  String
+  unit                          String   // 'kg' | 'item' | 'bag' | 'order' | 'hour'
+  default_proximate_turnaround_hours Int?
+  description                   String?
+  delicate_fabric               Boolean  @default(false)
+
+  WorkerServices                WorkerService[]
+}
+
+model WorkerService {
+  worker_id                  BigInt
+  service_code               String
+  is_active                  Boolean  @default(true)
+  base_price                 Decimal
+  min_qty                    Decimal?
+  max_qty                    Decimal?
+  turnaround_proximate_hours Int?
+  notes                      String?
+
+  Worker     Worker         @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  Service    ServiceCatalog @relation(fields: [service_code], references: [service_code])
+
+  // back-relation name must match
+  OrderItems OrderItem[]
+
+  @@id([worker_id, service_code])
+}
+
+model Order {
+  id                        BigInt   @id @default(autoincrement())
+  customer_user_id          BigInt
+  worker_id                 BigInt
+  status                    String
+
+  pickup_city               String
+  pickup_street             String
+  pickup_building           Int?
+  pickup_apartment_house    Int?
+  pickup_floor              Int?
+
+  delivery_city             String
+  delivery_street           String
+  delivery_building         Int?
+  delivery_apartment_house  Int?
+  delivery_floor            Int?
+
+  scheduled_pickup          DateTime?
+  scheduled_dropoff         DateTime?
+  payment_method            String?  // 'cash' | 'bit_proof'
+  created_at                DateTime @default(now())
+  updated_at                DateTime @default(now())
+  amount                    Int
+  notes                     String?
+
+  Customer                  User   @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
+  Worker                    Worker @relation("orders_as_worker", fields: [worker_id], references: [id])
+  Items                     OrderItem[]
+  Rating                    Rating?
+}
+
+model OrderItem {
+  id            BigInt   @id @default(autoincrement())
+  order_id      BigInt
+  worker_id     BigInt
+  service_code  String
+  item_type     String?
+  quantity      Decimal
+  unit_price    Decimal
+
+  Order         Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  WorkerService WorkerService @relation(fields: [worker_id, service_code], references: [worker_id, service_code])
+
+  @@index([service_code])
+}
+
+model MediaAsset {
+  id            BigInt   @id @default(autoincrement())
+  owner_user_id BigInt
+  url           String
+  mime_type     String
+  bytes         BigInt
+  width_px      Int?
+  height_px     Int?
+  checksum_sha1 String?
+  created_at    DateTime @default(now())
+
+  Owner         User          @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  Variants      MediaVariant[]
+  RatingPhotos  RatingPhoto[]
+}
+
+model MediaVariant {
+  id        BigInt   @id @default(autoincrement())
+  media_id  BigInt
+  kind      String   // 'original' | 'thumb' | 'web'
+  url       String
+  width_px  Int?
+  height_px Int?
+  bytes     BigInt?
+
+  Media     MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
+}
+
+model Rating {
+  id           BigInt   @id @default(autoincrement())
+  order_id     BigInt   @unique
+  rater_id     BigInt
+  rated_worker BigInt
+  score        Int
+  comment      String?
+  created_at   DateTime @default(now())
+
+  Order        Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  Rater        User     @relation("rating_rater", fields: [rater_id], references: [id], onDelete: Cascade)
+  Worker       Worker   @relation("rating_worker", fields: [rated_worker], references: [id], onDelete: Cascade)
+  Photos       RatingPhoto[]
+}
+
+model RatingPhoto {
+  id        BigInt   @id @default(autoincrement())
+  rating_id BigInt
+  media_id  BigInt
+  is_cover  Boolean  @default(false)
+
+  Rating    Rating     @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  Media     MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
+
+  @@index([rating_id])
 }

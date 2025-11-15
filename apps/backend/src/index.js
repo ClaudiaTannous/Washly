@@ -1,3 +1,6 @@
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
 const express = require("express");
 const dotenv = require("dotenv");
 const prisma = require("./prisma");
@@ -25,7 +28,6 @@ app.get("/healthz", async (_req, res) => {
   }
 });
 
-// database test
 app.get("/test-db", async (_req, res) => {
   try {
     const count = await prisma.user.count();

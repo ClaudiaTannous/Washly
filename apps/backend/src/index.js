@@ -44,3 +44,10 @@ const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(` Server running on port ${PORT}`);
 });
+
+const workerBusinessHoursRoutes = require("./routes/workerBusinessHours");
+const orderRoutes = require("./routes/order");
+
+app.use("/api", workerBusinessHoursRoutes);
+app.use("/api", orderRoutes);
+

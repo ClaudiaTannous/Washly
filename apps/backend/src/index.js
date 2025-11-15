@@ -1,18 +1,16 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const { prisma } = require("./prisma"); // Make sure this file exists
+const { prisma } = require("./prisma");
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-// root route
 app.get("/", (req, res) => {
   res.send("Washly backend is running ✅");
 });
 
-// health check
 app.get("/healthz", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -32,7 +30,7 @@ app.get("/test-db", async (_req, res) => {
   }
 });
 
-const PORT = process.env.PORT ;
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(` Server running on port ${PORT}`);
 });

@@ -1,6 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../prisma");
 const bcrypt = require("bcrypt");
-const prisma = new PrismaClient();
 
 exports.createUser = async (req, res) => {
   try {
@@ -19,7 +18,16 @@ exports.createUser = async (req, res) => {
       description,
     } = req.body;
 
-    if (!email || !password || !first_name || !last_name) {
+    if (
+      !email ||
+      !password ||
+      !first_name ||
+      !last_name ||
+      !phone ||
+      !country_name ||
+      !city_name ||
+      !street_name
+    ) {
       return res.status(400).json({ error: "Missing required fields" });
     }
 
@@ -35,7 +43,7 @@ exports.createUser = async (req, res) => {
     const newUser = await prisma.user.create({
       data: {
         email,
-        password_hash: hashedPassword, // FIXED HERE
+        password_hash: hashedPassword,
         first_name,
         last_name,
         phone,
@@ -200,6 +208,49 @@ exports.deleteUser = async (req, res) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    return res.status(500).json({ error: error.message });
+  }
+};
+exports.checkIfUserIsWorker = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid user id format" });
+    }
+
+    const userId = BigInt(id);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found in USER table" });
+    }
+
+    const worker = await prisma.worker.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        is_professional: true,
+        pickup_available: true,
+        delivery_available: true,
+        description: true,
+        image_url: true,
+      },
+    });
+
+    const response = {
+      isUser: true,
+      isWorker: !!worker,
+      workerData: worker || null,
+    };
+
+    return res.json(response);
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: error.message });
   }
 };

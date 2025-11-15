@@ -1,6 +1,5 @@
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../prisma");
 const bcrypt = require("bcrypt");
-const prisma = new PrismaClient();
 
 exports.createWorker = async (req, res) => {
   try {
@@ -16,6 +15,9 @@ exports.createWorker = async (req, res) => {
     if (!user_id || !/^\d+$/.test(String(user_id))) {
       return res.status(400).json({ error: "Valid user_id is required" });
     }
+
+    const userIdBigInt = BigInt(user_id);
+
     const existingUser = await prisma.user.findUnique({
       where: { id: userIdBigInt },
     });
@@ -23,6 +25,7 @@ exports.createWorker = async (req, res) => {
     if (!existingUser) {
       return res.status(404).json({ error: "User not found for this user_id" });
     }
+
     const existingWorker = await prisma.worker.findUnique({
       where: { id: userIdBigInt },
     });
@@ -32,6 +35,8 @@ exports.createWorker = async (req, res) => {
         .status(400)
         .json({ error: "Worker already exists for this user" });
     }
+
+    // 3) create worker
     const newWorker = await prisma.worker.create({
       data: {
         id: userIdBigInt,
@@ -48,12 +53,14 @@ exports.createWorker = async (req, res) => {
         user: true,
       },
     });
+
     return res.status(201).json(newWorker);
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message });
   }
 };
+
 exports.getWorkerById = async (req, res) => {
   try {
     const { id } = req.params;

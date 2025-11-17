@@ -51,3 +51,9 @@ const orderRoutes = require("./routes/order");
 app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
 
+const serviceCatalogRoutes = require("./routes/serviceCatalog");
+const workerServiceRoutes = require("./routes/workerService");
+
+app.use("/api", serviceCatalogRoutes);
+app.use("/api", workerServiceRoutes);
+

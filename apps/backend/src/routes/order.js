@@ -9,10 +9,17 @@ const {
 
 const router = express.Router();
 
+// Create order + get all orders
 router.post("/orders", createOrder);
 router.get("/orders", getAllOrders);
-router.get("/order/:id", getOrderById);
-router.patch("/order/:id/status", updateOrderStatus);
-router.delete("/order/:id", deleteOrder);
+
+// Get one order
+router.get("/orders/:id", getOrderById);
+
+// Update order status
+router.patch("/orders/:id/status", updateOrderStatus);
+
+// Delete order
+router.delete("/orders/:id", deleteOrder);
 
 module.exports = router;

@@ -1,28 +1,115 @@
 const prisma = require("../prisma");
+const { canWorkerTakeOrder } = require("../utils/availability");
+
+// Allowed enum values (keep in sync with schema.prisma)
+const ORDER_STATUSES = [
+  "REQUESTED",
+  "CONFIRMED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED_BY_WORKER",
+  "CANCELLED_BY_CUSTOMER",
+];
+
+const PAYMENT_METHODS = ["CASH", "BIT"];
 
 // ---------------------------
-// CREATE ORDER
+// CREATE ORDER (with booking + wash pricing + payment)
 // ---------------------------
 exports.createOrder = async (req, res) => {
   try {
     const body = req.body;
 
-    // Validate required fields
+    // 1) Validate required fields from client
     if (
       !body.customerUserId ||
       !body.workerId ||
       !body.pickup ||
       !body.delivery ||
-      !body.amount
+      !body.scheduledPickup ||
+      body.itemsCount == null || // must exist, can be 0+ but we'll check >0
+      !body.paymentMethod
     ) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({
+        error:
+          "Missing required fields (customerUserId, workerId, pickup, delivery, scheduledPickup, itemsCount, paymentMethod)",
+      });
     }
 
+    // Validate payment method enum
+    if (!PAYMENT_METHODS.includes(body.paymentMethod)) {
+      return res
+        .status(400)
+        .json({ error: "paymentMethod must be CASH or BIT" });
+    }
+
+    // Parse and validate items count
+    const itemsCount = Number(body.itemsCount);
+    if (!Number.isFinite(itemsCount) || itemsCount <= 0) {
+      return res
+        .status(400)
+        .json({ error: "itemsCount must be a positive number" });
+    }
+
+    // 2) Parse pickup datetime
+    const pickupDate = new Date(body.scheduledPickup);
+    if (isNaN(pickupDate.getTime())) {
+      return res
+        .status(400)
+        .json({ error: "Invalid scheduledPickup datetime" });
+    }
+
+    const customerIdBigInt = BigInt(body.customerUserId);
+    const workerIdBigInt = BigInt(body.workerId);
+
+    // 3) Load worker with schedule & existing orders + pricing
+    const worker = await prisma.worker.findUnique({
+      where: { id: workerIdBigInt },
+      include: {
+        Hours: true, // WorkerBusinessHours
+        Orders: true, // used by canWorkerTakeOrder to count today's bookings
+      },
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: "Worker not found" });
+    }
+
+    // 4) Check if worker can take this order at this time (booking rules)
+    if (!canWorkerTakeOrder(worker, pickupDate)) {
+      return res.status(400).json({
+        error: "Worker is not available at the requested pickup time",
+      });
+    }
+
+    // 5) Calculate washes and total amount based on worker's capacity & price
+    const maxItemsPerWash =
+      typeof worker.max_items_per_wash === "number" &&
+      worker.max_items_per_wash > 0
+        ? worker.max_items_per_wash
+        : 10; // fallback
+
+    const pricePerWash =
+      typeof worker.price_per_wash === "number" && worker.price_per_wash > 0
+        ? worker.price_per_wash
+        : 30; // fallback
+
+    const washesCount = Math.ceil(itemsCount / maxItemsPerWash);
+    const totalAmount = washesCount * pricePerWash;
+
+    // 6) Determine initial status (optional override from body)
+    let status = "REQUESTED";
+    if (body.status && ORDER_STATUSES.includes(body.status)) {
+      status = body.status;
+    }
+
+    // 7) Create order with all logic applied
     const order = await prisma.order.create({
       data: {
-        customer_user_id: BigInt(body.customerUserId),
-        worker_id: BigInt(body.workerId),
-        status: body.status || "Pending",
+        customer_user_id: customerIdBigInt,
+        worker_id: workerIdBigInt,
+
+        status,
 
         pickup_city: body.pickup.city,
         pickup_street: body.pickup.street,
@@ -36,15 +123,21 @@ exports.createOrder = async (req, res) => {
         delivery_apartment_house: body.delivery.apartmentHouse ?? null,
         delivery_floor: body.delivery.floor ?? null,
 
-        scheduled_pickup: body.scheduledPickup
-          ? new Date(body.scheduledPickup)
-          : null,
+        scheduled_pickup: pickupDate,
         scheduled_dropoff: body.scheduledDropoff
           ? new Date(body.scheduledDropoff)
           : null,
 
-        payment_method: body.paymentMethod || null,
-        amount: body.amount,
+        // 🧺 quantity & pricing
+        items_count: itemsCount,
+        washes_count: washesCount,
+        amount: totalAmount,
+
+        // 💰 payment
+        payment_method: body.paymentMethod, // CASH or BIT
+        // payment_status defaults to UNPAID in schema
+        payment_notes: body.paymentNotes || null,
+
         notes: body.notes || null,
       },
       include: {
@@ -69,7 +162,7 @@ exports.getAllOrders = async (req, res) => {
       include: {
         Customer: true,
         Worker: true,
-        Items: true,
+        // no Items relation anymore
       },
       orderBy: { created_at: "desc" },
     });
@@ -97,7 +190,7 @@ exports.getOrderById = async (req, res) => {
       include: {
         Customer: true,
         Worker: true,
-        Items: true,
+        // no Items relation anymore
       },
     });
 
@@ -124,8 +217,28 @@ exports.updateOrderStatus = async (req, res) => {
       return res.status(400).json({ error: "Invalid order id format" });
     }
 
-    if (!status) {
-      return res.status(400).json({ error: "Status is required" });
+    if (!status || !ORDER_STATUSES.includes(status)) {
+      return res.status(400).json({
+        error: "Invalid status. Must be one of: " + ORDER_STATUSES.join(", "),
+      });
+    }
+
+    // Optional rule: cannot mark COMPLETED if payment not PAID
+    if (status === "COMPLETED") {
+      const existing = await prisma.order.findUnique({
+        where: { id: BigInt(id) },
+        select: { payment_status: true },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ error: "Order not found" });
+      }
+
+      if (existing.payment_status !== "PAID") {
+        return res.status(400).json({
+          error: "Order cannot be completed until payment_status is PAID",
+        });
+      }
     }
 
     const updatedOrder = await prisma.order.update({

@@ -5,16 +5,32 @@ const {
   getWorkerById,
   updateWorker,
   deleteWorker,
+  getWorkerOrders,
+  updateWorkerSchedule,
+  setWorkerOnlineStatus,
 } = require("../controllers/worker");
 
 const router = express.Router();
 
+// Create worker
 router.post("/workers", createWorker);
 
-router.get("/worker/:id", getWorkerById);
+// Get worker
+router.get("/workers/:id", getWorkerById);
 
-router.put("/worker/:id", updateWorker);
+// Update worker
+router.put("/workers/:id", updateWorker);
 
-router.delete("/worker/:id", deleteWorker);
+// Delete worker
+router.delete("/workers/:id", deleteWorker);
+
+// Get worker orders (today/upcoming/all)
+router.get("/workers/:id/orders", getWorkerOrders);
+
+// Update weekly schedule
+router.put("/workers/:id/schedule", updateWorkerSchedule);
+
+// Set worker online/offline
+router.patch("/workers/:id/online", setWorkerOnlineStatus);
 
 module.exports = router;

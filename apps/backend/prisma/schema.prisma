@@ -1,12 +1,39 @@
 generator client {
   provider = "prisma-client-js"
-  
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+//
+// ========= ENUMS =========
+//
+
+enum OrderStatus {
+  REQUESTED          // customer placed request
+  CONFIRMED          // worker accepted
+  IN_PROGRESS        // worker started washing
+  COMPLETED          // delivered and finished
+  CANCELLED_BY_WORKER
+  CANCELLED_BY_CUSTOMER
+}
+
+enum PaymentMethod {
+  CASH
+  BIT
+}
+
+enum PaymentStatus {
+  UNPAID               // default for new orders
+  PENDING_VERIFICATION // proof uploaded, waiting for worker
+  PAID                 // worker confirmed payment
+}
+
+//
+// ========= MODELS =========
+//
 
 model User {
   id                     BigInt       @id @default(autoincrement())
@@ -28,22 +55,31 @@ model User {
   OrdersAsCustomer       Order[]      @relation("orders_as_customer")
   RatingsAuthored        Rating[]     @relation("rating_rater")
   Worker                 Worker?
-
+  PaymentProofsUploaded  OrderPaymentProof[] @relation("OrderPaymentProof_User")
+  
   @@index([email])
 }
 
 model Worker {
-  id                 BigInt                @id
-  is_professional    Boolean               @default(false)
-  pickup_available   Boolean               @default(false)
-  delivery_available Boolean               @default(false)
-  description        String?
-  image_url          String?
-  Orders             Order[]               @relation("orders_as_worker")
-  RatingsReceived    Rating[]              @relation("rating_worker")
-  user               User                  @relation(fields: [id], references: [id], onDelete: Cascade)
-  Hours              WorkerBusinessHours[] @relation("WorkerHours")
-  Services           WorkerService[]
+  id                  BigInt                @id
+  is_professional     Boolean               @default(false)
+  pickup_available    Boolean               @default(false)
+  delivery_available  Boolean               @default(false)
+  description         String?
+  is_online           Boolean               @default(true)
+  max_orders_per_day  Int                   @default(5)
+  min_notice_minutes  Int                   @default(120)
+
+  // pricing & capacity per wash
+  max_items_per_wash  Int                   @default(10)
+  price_per_wash      Int                   @default(30)
+
+  image_url           String?
+  Orders              Order[]               @relation("orders_as_worker")
+  RatingsReceived     Rating[]              @relation("rating_worker")
+  user                User                  @relation(fields: [id], references: [id], onDelete: Cascade)
+  Hours               WorkerBusinessHours[] @relation("WorkerHours")
+  Services            WorkerService[]
 }
 
 model WorkerBusinessHours {
@@ -75,7 +111,6 @@ model WorkerService {
   max_qty                    Decimal?
   turnaround_proximate_hours Int?
   notes                      String?
-  OrderItems                 OrderItem[]
   Service                    ServiceCatalog @relation(fields: [service_code], references: [service_code])
   Worker                     Worker         @relation(fields: [worker_id], references: [id], onDelete: Cascade)
 
@@ -83,45 +118,47 @@ model WorkerService {
 }
 
 model Order {
-  id                       BigInt      @id @default(autoincrement())
+  id                       BigInt        @id @default(autoincrement())
   customer_user_id         BigInt
   worker_id                BigInt
-  status                   String
+
+  status                   OrderStatus   @default(REQUESTED)
+
   pickup_city              String
   pickup_street            String
   pickup_building          Int?
   pickup_apartment_house   Int?
   pickup_floor             Int?
+
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
   delivery_apartment_house Int?
   delivery_floor           Int?
+
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
-  payment_method           String?
-  created_at               DateTime    @default(now())
-  updated_at               DateTime    @default(now())
-  amount                   Int
+
+  // quantity & pricing
+  items_count              Int           @default(0)
+  washes_count             Int           @default(0)
+
+  // payment
+  payment_method           PaymentMethod @default(CASH)
+  payment_status           PaymentStatus @default(UNPAID)
+  payment_confirmed_at     DateTime?
+  payment_confirmed_by     BigInt?
+  payment_notes            String?
+
+  created_at               DateTime      @default(now())
+  updated_at               DateTime      @default(now())
+  amount                   Int           @default(0)
   notes                    String?
-  Customer                 User        @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
-  Worker                   Worker      @relation("orders_as_worker", fields: [worker_id], references: [id])
-  Items                    OrderItem[]
+
+  Customer                 User          @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
+  Worker                   Worker        @relation("orders_as_worker", fields: [worker_id], references: [id])
   Rating                   Rating?
-}
-
-model OrderItem {
-  id            BigInt        @id @default(autoincrement())
-  order_id      BigInt
-  worker_id     BigInt
-  service_code  String
-  item_type     String?
-  quantity      Decimal
-  unit_price    Decimal
-  Order         Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  WorkerService WorkerService @relation(fields: [worker_id, service_code], references: [worker_id, service_code])
-
-  @@index([service_code])
+  PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
 }
 
 model MediaAsset {
@@ -137,6 +174,7 @@ model MediaAsset {
   Owner         User           @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
   Variants      MediaVariant[]
   RatingPhotos  RatingPhoto[]
+  PaymentProofs OrderPaymentProof[] @relation("OrderPaymentProof_Media")
 }
 
 model MediaVariant {
@@ -173,4 +211,18 @@ model RatingPhoto {
   Rating    Rating     @relation(fields: [rating_id], references: [id], onDelete: Cascade)
 
   @@index([rating_id])
+}
+
+model OrderPaymentProof {
+  id          BigInt     @id @default(autoincrement())
+  order_id    BigInt
+  media_id    BigInt
+  uploaded_by BigInt
+  created_at  DateTime   @default(now())
+
+  Order    Order      @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
+  Media    MediaAsset @relation("OrderPaymentProof_Media", fields: [media_id], references: [id], onDelete: Cascade)
+  Uploader User       @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
+
+  @@index([order_id])
 }

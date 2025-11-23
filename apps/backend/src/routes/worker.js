@@ -8,14 +8,19 @@ const {
   getWorkerOrders,
   updateWorkerSchedule,
   setWorkerOnlineStatus,
+  getWorkers,              // 👈 أضف هذا
 } = require("../controllers/worker");
 
 const router = express.Router();
 
+// 👇 IMPORTANT: هذا لازم يكون أول GET للـ workers
+// Get workers list with filters
+router.get("/workers", getWorkers);
+
 // Create worker
 router.post("/workers", createWorker);
 
-// Get worker
+// Get worker by ID  (مهم يكون بعد الـ /workers)
 router.get("/workers/:id", getWorkerById);
 
 // Update worker
@@ -24,7 +29,7 @@ router.put("/workers/:id", updateWorker);
 // Delete worker
 router.delete("/workers/:id", deleteWorker);
 
-// Get worker orders (today/upcoming/all)
+// Get worker orders
 router.get("/workers/:id/orders", getWorkerOrders);
 
 // Update weekly schedule

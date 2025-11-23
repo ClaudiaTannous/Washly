@@ -87,6 +87,108 @@ exports.createWorker = async (req, res) => {
 };
 
 // ---------------------------
+// GET WORKERS LIST WITH FILTERS
+// ---------------------------
+// GET /workers?city=Haifa&minPrice=20&maxPrice=50&serviceCode=WASH&serviceActive=true&pickupAvailable=true&online=true
+exports.getWorkers = async (req, res) => {
+  try {
+    const {
+      city,
+      minPrice,
+      maxPrice,
+      serviceCode,
+      serviceActive,
+      pickupAvailable,
+      online,
+    } = req.query;
+
+    const where = {};
+
+    // ---- city filter (from related User.city_name) ----
+    if (city) {
+      where.user = {
+        city_name: {
+          equals: city,
+          mode: "insensitive",
+        },
+      };
+    }
+
+    // ---- price_per_wash filter ----
+    const priceFilter = {};
+    const minP = minPrice ? parseInt(minPrice, 10) : undefined;
+    const maxP = maxPrice ? parseInt(maxPrice, 10) : undefined;
+
+    if (!Number.isNaN(minP) && minP !== undefined) {
+      priceFilter.gte = minP;
+    }
+    if (!Number.isNaN(maxP) && maxP !== undefined) {
+      priceFilter.lte = maxP;
+    }
+    if (Object.keys(priceFilter).length > 0) {
+      where.price_per_wash = priceFilter;
+    }
+
+    // helper to parse booleans from query string
+    const parseBoolean = (value) => {
+      if (value === undefined) return undefined;
+      if (value === "true" || value === "1") return true;
+      if (value === "false" || value === "0") return false;
+      return undefined;
+    };
+
+    // ---- pickup_available filter ----
+    const pickupBool = parseBoolean(pickupAvailable);
+    if (pickupBool !== undefined) {
+      where.pickup_available = pickupBool;
+    }
+
+    // ---- is_online filter ----
+    const onlineBool = parseBoolean(online);
+    if (onlineBool !== undefined) {
+      where.is_online = onlineBool;
+    }
+
+    // ---- service filter (WorkerService) ----
+    const serviceFilter = {};
+    const serviceActiveBool = parseBoolean(serviceActive);
+
+    if (serviceCode) {
+      serviceFilter.service_code = serviceCode;
+    }
+    if (serviceActiveBool !== undefined) {
+      serviceFilter.is_active = serviceActiveBool;
+    }
+
+    if (Object.keys(serviceFilter).length > 0) {
+      // worker must have at least one WorkerService matching these conditions
+      where.Services = {
+        some: serviceFilter,
+      };
+    }
+
+    const workers = await prisma.worker.findMany({
+      where,
+      include: {
+        user: true,
+        Services: {
+          include: {
+            Service: true, // from ServiceCatalog
+          },
+        },
+        Hours: true,
+      },
+    });
+
+    return res.json(workers);
+  } catch (error) {
+    console.error("Get Workers (with filters) Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+
+// ---------------------------
 // GET WORKER BY ID
 // ---------------------------
 exports.getWorkerById = async (req, res) => {

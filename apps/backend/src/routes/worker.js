@@ -13,6 +13,8 @@ const {
 
 const router = express.Router();
 
+const { getWorkerOrderHistory } = require("../controllers/order");
+
 // 👇 IMPORTANT: هذا لازم يكون أول GET للـ workers
 // Get workers list with filters
 router.get("/workers", getWorkers);
@@ -37,5 +39,7 @@ router.put("/workers/:id/schedule", updateWorkerSchedule);
 
 // Set worker online/offline
 router.patch("/workers/:id/online", setWorkerOnlineStatus);
+
+router.get("/workers/:id/orders/history", getWorkerOrderHistory);
 
 module.exports = router;

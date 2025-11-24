@@ -287,3 +287,71 @@ exports.deleteOrder = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+// ---------------------------
+// GET USER ORDER HISTORY
+// ---------------------------
+exports.getUserOrders = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid user id format" });
+    }
+
+    const where = {
+      customer_user_id: BigInt(id),
+      ...(status ? { status } : {}),
+    };
+
+    const orders = await prisma.order.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      include: {
+        Worker: {
+          include: {
+            user: true,
+          },
+        }
+      },
+    });
+
+    return res.json(orders);
+  } catch (error) {
+    console.error("Get User Orders Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ---------------------------
+// GET WORKER ORDER HISTORY
+// ---------------------------
+exports.getWorkerOrderHistory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.query;
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid worker id format" });
+    }
+
+    const where = {
+      worker_id: BigInt(id),
+      ...(status ? { status } : {}),
+    };
+
+    const orders = await prisma.order.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      include: {
+        Customer: true,
+      },
+    });
+
+    return res.json(orders);
+  } catch (error) {
+    console.error("Get Worker Orders Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};

@@ -8,7 +8,7 @@ const {
   getWorkerOrders,
   updateWorkerSchedule,
   setWorkerOnlineStatus,
-  getWorkers,              // 👈 أضف هذا
+  getWorkers,          
 } = require("../controllers/worker");
 
 const router = express.Router();
@@ -18,7 +18,10 @@ const router = express.Router();
 router.get("/workers", getWorkers);
 
 // Create worker
-router.post("/workers", createWorker);
+const { requireAuth } = require("../middlewares/auth");
+
+router.post("/workers", requireAuth, createWorker);
+
 
 // Get worker by ID  (مهم يكون بعد الـ /workers)
 router.get("/workers/:id", getWorkerById);

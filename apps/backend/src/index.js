@@ -1,22 +1,33 @@
+// Make BigInt JSON-safe (for Prisma IDs)
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
+
 const express = require("express");
 const dotenv = require("dotenv");
-const prisma = require("./prisma");
 const cors = require("cors");
+const prisma = require("./prisma");
 
-const workerRoutes = require("./routes/worker");
+// Route imports
+const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/user");
+const workerRoutes = require("./routes/worker");
+const workerBusinessHoursRoutes = require("./routes/workerBusinessHours");
+const orderRoutes = require("./routes/order");
+const serviceCatalogRoutes = require("./routes/serviceCatalog");
+const workerServiceRoutes = require("./routes/workerService");
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
+// 🔹 Global middlewares
+app.use(cors());
+app.use(express.json()); // <--- this is in the right place
+
+// 🔹 Simple health routes
 app.get("/", (req, res) => {
-  res.send("Washly backend is running ");
+  res.send("Washly backend is running");
 });
 
 app.get("/healthz", async (_req, res) => {
@@ -37,23 +48,19 @@ app.get("/test-db", async (_req, res) => {
   }
 });
 
-app.use("/api", workerRoutes);
+// 🔹 API routes
+app.use("/api", authRoutes);
 app.use("/api", userRoutes);
-
-const PORT = process.env.PORT;
-app.listen(PORT, () => {
-  console.log(` Server running on port ${PORT}`);
-});
-
-const workerBusinessHoursRoutes = require("./routes/workerBusinessHours");
-const orderRoutes = require("./routes/order");
-
+app.use("/api", workerRoutes);
 app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
-
-const serviceCatalogRoutes = require("./routes/serviceCatalog");
-const workerServiceRoutes = require("./routes/workerService");
-
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
 
+// 🔹 Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+module.exports = app; // optional, useful for tests

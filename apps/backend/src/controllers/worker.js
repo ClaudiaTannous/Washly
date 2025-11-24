@@ -1,12 +1,12 @@
+
 const prisma = require("../prisma");
 
-// ---------------------------
-// CREATE WORKER
-// ---------------------------
 exports.createWorker = async (req, res) => {
   try {
+    // 🔐 take user id from JWT, not from body
+    const userIdBigInt = BigInt(req.user.userId);
+
     const {
-      user_id,
       is_professional,
       pickup_available,
       delivery_available,
@@ -19,20 +19,16 @@ exports.createWorker = async (req, res) => {
       price_per_wash,
     } = req.body;
 
-    if (!user_id || !/^\d+$/.test(String(user_id))) {
-      return res.status(400).json({ error: "Valid user_id is required" });
-    }
-
-    const userIdBigInt = BigInt(user_id);
-
+    // 1) check that user exists
     const existingUser = await prisma.user.findUnique({
       where: { id: userIdBigInt },
     });
 
     if (!existingUser) {
-      return res.status(404).json({ error: "User not found for this user_id" });
+      return res.status(404).json({ error: "User not found" });
     }
 
+    // 2) check not already a worker
     const existingWorker = await prisma.worker.findUnique({
       where: { id: userIdBigInt },
     });
@@ -43,34 +39,26 @@ exports.createWorker = async (req, res) => {
         .json({ error: "Worker already exists for this user" });
     }
 
-    const data = {
-      id: userIdBigInt,
-      is_professional:
-        typeof is_professional === "boolean" ? is_professional : false,
-      pickup_available:
-        typeof pickup_available === "boolean" ? pickup_available : false,
-      delivery_available:
-        typeof delivery_available === "boolean" ? delivery_available : false,
-      description,
-      image_url,
-    };
+    // 3) build data (only override if provided; Prisma has defaults)
+    const data = { id: userIdBigInt };
 
-    if (typeof is_online === "boolean") {
-      data.is_online = is_online;
-    }
-    if (typeof max_orders_per_day === "number") {
+    if (typeof is_professional === "boolean")
+      data.is_professional = is_professional;
+    if (typeof pickup_available === "boolean")
+      data.pickup_available = pickup_available;
+    if (typeof delivery_available === "boolean")
+      data.delivery_available = delivery_available;
+    if (description !== undefined) data.description = description;
+    if (image_url !== undefined) data.image_url = image_url;
+    if (typeof is_online === "boolean") data.is_online = is_online;
+    if (typeof max_orders_per_day === "number")
       data.max_orders_per_day = max_orders_per_day;
-    }
-    if (typeof min_notice_minutes === "number") {
+    if (typeof min_notice_minutes === "number")
       data.min_notice_minutes = min_notice_minutes;
-    }
-
-    if (typeof max_items_per_wash === "number") {
+    if (typeof max_items_per_wash === "number")
       data.max_items_per_wash = max_items_per_wash;
-    }
-    if (typeof price_per_wash === "number") {
+    if (typeof price_per_wash === "number")
       data.price_per_wash = price_per_wash;
-    }
 
     const newWorker = await prisma.worker.create({
       data,
@@ -81,10 +69,12 @@ exports.createWorker = async (req, res) => {
 
     return res.status(201).json(newWorker);
   } catch (error) {
-    console.error(error);
+    console.error("createWorker error:", error);
     return res.status(500).json({ error: error.message });
   }
 };
+
+
 
 // ---------------------------
 // GET WORKERS LIST WITH FILTERS

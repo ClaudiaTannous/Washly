@@ -6,6 +6,7 @@ BigInt.prototype.toJSON = function () {
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const cookieParser = require("cookie-parser"); // 👈 NEW
 const prisma = require("./prisma");
 
 // Route imports
@@ -21,11 +22,16 @@ dotenv.config();
 
 const app = express();
 
-// 🔹 Global middlewares
-app.use(cors());
-app.use(express.json()); // <--- this is in the right place
+app.use(
+  cors({
+    origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
+    credentials: true,
+  })
+);
 
-// 🔹 Simple health routes
+app.use(cookieParser());
+app.use(express.json());
+
 app.get("/", (req, res) => {
   res.send("Washly backend is running");
 });

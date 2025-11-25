@@ -9,7 +9,6 @@ function signToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 }
 
-// POST /api/auth/login
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -39,6 +38,13 @@ exports.login = async (req, res) => {
       role,
     });
 
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production", // only over HTTPS in prod
+      sameSite: "lax", // or "strict" if you want
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
+    });
+
     return res.json({
       token,
       user: {
@@ -55,7 +61,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// GET /api/auth/me
 exports.me = async (req, res) => {
   try {
     const userId = BigInt(req.user.userId);
@@ -81,4 +86,9 @@ exports.me = async (req, res) => {
     console.error("Me error:", err);
     return res.status(500).json({ error: "Internal server error" });
   }
+};
+
+exports.logout = (req, res) => {
+  res.clearCookie("token");
+  return res.json({ message: "Logged out" });
 };

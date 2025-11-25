@@ -12,11 +12,11 @@ function canWorkerTakeOrder(worker, pickupDate) {
 
   const now = new Date();
 
-  // 1. minimum notice
+  //  minimum notice
   const minStart = new Date(now.getTime() + worker.min_notice_minutes * 60000);
   if (pickupDate < minStart) return false;
 
-  // 2. daily capacity
+  //  daily capacity
   const startDay = new Date(pickupDate);
   startDay.setHours(0, 0, 0, 0);
   const endDay = new Date(pickupDate);
@@ -34,7 +34,7 @@ function canWorkerTakeOrder(worker, pickupDate) {
 
   if (countToday >= worker.max_orders_per_day) return false;
 
-  // 3. weekly schedule check
+  //  weekly schedule check
   const jsDay = pickupDate.getDay();
   const pickupHHMM = toHHMM(pickupDate);
 

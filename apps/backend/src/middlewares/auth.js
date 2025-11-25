@@ -3,13 +3,21 @@ const jwt = require("jsonwebtoken");
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret";
 
 exports.requireAuth = (req, res, next) => {
-  const authHeader = req.headers.authorization;
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Authorization token required" });
+  // 1) Try Authorization header: "Bearer <token>"
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
   }
 
-  const token = authHeader.split(" ")[1];
+  if (!token && req.cookies && req.cookies.token) {
+    token = req.cookies.token;
+  }
+
+  if (!token) {
+    return res.status(401).json({ error: "Authorization token required" });
+  }
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
@@ -21,7 +29,6 @@ exports.requireAuth = (req, res, next) => {
   }
 };
 
-// ROLE: worker only
 exports.requireWorker = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ error: "Not authenticated" });
@@ -32,7 +39,6 @@ exports.requireWorker = (req, res, next) => {
   next();
 };
 
-// Only user can edit themselves (no admin yet)
 exports.requireSelfOrAdmin = (req, res, next) => {
   const paramId = String(req.params.id);
   const loggedInId = String(req.user.userId);

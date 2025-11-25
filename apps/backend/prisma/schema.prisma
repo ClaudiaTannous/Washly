@@ -139,11 +139,11 @@ model Order {
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
 
-  // quantity & pricing
+
   items_count              Int           @default(0)
   washes_count             Int           @default(0)
 
-  // payment
+ 
   payment_method           PaymentMethod @default(CASH)
   payment_status           PaymentStatus @default(UNPAID)
   payment_confirmed_at     DateTime?

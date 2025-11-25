@@ -9,7 +9,6 @@ const {
 
 const router = express.Router();
 
-// Service Catalog
 router.post("/services", createService);
 router.get("/services", getAllServices);
 router.get("/services/:service_code", getServiceByCode);

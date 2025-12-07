@@ -6,7 +6,10 @@ BigInt.prototype.toJSON = function () {
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const cookieParser = require("cookie-parser"); // 👈 NEW
+const cookieParser = require("cookie-parser");
+const path = require("path");
+const fs = require("fs");
+
 const prisma = require("./prisma");
 
 // Route imports
@@ -22,6 +25,14 @@ dotenv.config();
 
 const app = express();
 
+// Ensure uploads folder exists
+const uploadRoot = path.join(__dirname, "uploads");
+const avatarFolder = path.join(uploadRoot, "avatars");
+
+if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot);
+if (!fs.existsSync(avatarFolder)) fs.mkdirSync(avatarFolder);
+
+// Enable CORS
 app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
@@ -31,6 +42,9 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.json());
+
+// 🔹 Make uploaded images publicly accessible
+app.use("/uploads", express.static(uploadRoot));
 
 app.get("/", (req, res) => {
   res.send("Washly backend is running");
@@ -69,4 +83,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = app; // optional, useful for tests
+module.exports = app;

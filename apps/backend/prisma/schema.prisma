@@ -106,7 +106,6 @@ model WorkerService {
   worker_id                  BigInt
   service_code               String
   is_active                  Boolean        @default(true)
-  base_price                 Decimal
   min_qty                    Decimal?
   max_qty                    Decimal?
   turnaround_proximate_hours Int?

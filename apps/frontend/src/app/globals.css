@@ -126,3 +126,44 @@
 html {
   font-size: var(--font-size);
 }
+
+/* === WASHLY BLUE PULSE — TIGHT + STRONG === */
+
+.washly-glow {
+  box-shadow:
+    0 0 12px #86BECC,
+    0 0 22px #86BECC,
+    0 0 32px #42C3D1,
+    0 0 44px #42C3D1;
+  border-radius: 20px;
+}
+
+
+@keyframes washlyPulse {
+  0% {
+    box-shadow:
+      0 0 10px #86BECC,
+      0 0 18px #86BECC,
+      0 0 25px #42C3D1;
+  }
+
+  50% {
+    box-shadow:
+      0 0 18px #86BECC,
+      0 0 35px #86BECC,
+      0 0 50px #42C3D1;
+  }
+
+  100% {
+    box-shadow:
+      0 0 10px #86BECC,
+      0 0 18px #86BECC,
+      0 0 25px #42C3D1;
+  }
+}
+
+
+
+
+
+

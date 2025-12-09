@@ -18,6 +18,9 @@ export default function AuthPage() {
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [street, setStreet] = useState("");
+  const [signupError, setSignupError] = useState("");
+  const [signupSuccess, setSignupSuccess] = useState("");
+
 
   // === LOGIN HANDLER (UPDATED) ===
   async function handleLogin() {
@@ -79,8 +82,79 @@ export default function AuthPage() {
     }
   }
 
+  function isValidEmail(email) {
+  const emailRegex =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+}
+
+
+  // === SIGNUP HANDLER ===
+async function handleSignup() {
+  setSignupError("");
+  setSignupSuccess("");
+
+  if (!email || !password || !firstName || !lastName || !phone || !country || !city || !street) {
+    setSignupError("All fields must be filled.");
+    return;
+  }
+
+  if (!isValidEmail(email)) {
+  setSignupError("Please enter a valid email address.");
+  return;
+}
+
+
+  try {
+    const res = await fetch("http://localhost:5000/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        password,
+        first_name: firstName,
+        last_name: lastName,
+        phone,
+        country_name: country,
+        city_name: city,
+        street_name: street
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setSignupError(data.error || "Registration failed.");
+      return;
+    }
+
+    setSignupSuccess("Account created successfully! Redirecting...");
+    
+
+    // 🔥 CLEAR ALL INPUTS AFTER SUCCESS
+    setEmail("");
+    setPassword("");
+    setFirstName("");
+    setLastName("");
+    setPhone("");
+    setCountry("");
+    setCity("");
+    setStreet("");
+
+    // 🔥 SWITCH TO LOGIN PAGE AFTER 1.5s
+    setTimeout(() => {
+      setIsLogin(true);
+    }, 1500);
+
+  } catch (err) {
+    setSignupError("Server error. Try again later.");
+  }
+}
+
+
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#EBF8FB]">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#EBF8FB] to-[#C7ECF5]">
       <div className="relative w-[850px] h-[480px] rounded-2xl overflow-hidden washly-glow">
 
         {/* Sliding Panel Background */}
@@ -241,15 +315,21 @@ export default function AuthPage() {
             className="w-full mb-6 mt-1 bg-transparent border-b border-gray-300 py-2 focus:outline-none"
           />
 
+{signupError && <p className="text-red-400 text-sm">{signupError}</p>}
+{signupSuccess && <p className="text-green-400 text-sm">{signupSuccess}</p>}
+
+
           <button
-            className="
-              w-full py-3 rounded-full text-white font-semibold
-              bg-gradient-to-r from-[#86BECC] to-[#42C3D1]
-              shadow-lg hover:opacity-90 transition
-            "
-          >
-            Sign Up
-          </button>
+  onClick={handleSignup}
+  className="
+    w-full py-3 rounded-full text-white font-semibold
+    bg-gradient-to-r from-[#86BECC] to-[#42C3D1]
+    shadow-lg hover:opacity-90 transition
+  "
+>
+  Sign Up
+</button>
+
 
           <p className="text-sm mt-4">
             Already have an account?

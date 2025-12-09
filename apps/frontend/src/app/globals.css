@@ -131,36 +131,40 @@ html {
 
 .washly-glow {
   box-shadow:
-    0 0 12px #86BECC,
-    0 0 22px #86BECC,
-    0 0 32px #42C3D1,
-    0 0 44px #42C3D1;
+    0 0 40px rgba(66, 195, 209, 0.9),
+    0 0 80px rgba(66, 195, 209, 0.9),
+    0 0 130px rgba(0, 140, 255, 1),
+    0 0 200px rgba(0, 140, 255, 1);
   border-radius: 20px;
+  animation: washlyPulse 3s infinite ease-in-out;
 }
+
+
 
 
 @keyframes washlyPulse {
   0% {
     box-shadow:
-      0 0 10px #86BECC,
-      0 0 18px #86BECC,
-      0 0 25px #42C3D1;
+      0 0 20px #86BECC,
+      0 0 35px #86BECC,
+      0 0 60px #42C3D1;
   }
 
   50% {
     box-shadow:
-      0 0 18px #86BECC,
       0 0 35px #86BECC,
-      0 0 50px #42C3D1;
+      0 0 65px #86BECC,
+      0 0 100px #42C3D1;
   }
 
   100% {
     box-shadow:
-      0 0 10px #86BECC,
-      0 0 18px #86BECC,
-      0 0 25px #42C3D1;
+      0 0 20px #86BECC,
+      0 0 35px #86BECC,
+      0 0 60px #42C3D1;
   }
 }
+
 
 
 

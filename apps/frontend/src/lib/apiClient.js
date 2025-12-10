@@ -1,6 +1,36 @@
-// ────────────────────────────────────────────
-// WORKER ENDPOINTS
-// ────────────────────────────────────────────
+const API_BASE_URL = "http://localhost:5000";
+
+export async function apiFetch(path, options = {}) {
+  const url = `${API_BASE_URL}${path}`;
+
+  const defaultHeaders = {};
+
+  if (options.body && !(options.body instanceof FormData)) {
+    defaultHeaders["Content-Type"] = "application/json";
+  }
+
+  const finalOptions = {
+    method: options.method || "GET",
+    headers: {
+      ...defaultHeaders,
+      ...(options.headers || {}),
+    },
+    body: options.body,
+  };
+
+  const res = await fetch(url, finalOptions);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API Error (${res.status}): ${text}`);
+  }
+
+  try {
+    return await res.json();
+  } catch {
+    return {};
+  }
+}
 
 // Create Worker (Signup)
 export function createWorker(data) {
@@ -8,6 +38,9 @@ export function createWorker(data) {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+export function signupWorker(data) {
+  return createWorker(data);
 }
 
 // Get Worker Profile
@@ -45,7 +78,7 @@ export function updateWorkerSchedule(workerId, rules) {
 export function setWorkerOnlineStatus(workerId, isOnline) {
   return apiFetch(`/api/workers/${workerId}/online`, {
     method: "PATCH",
-    body: JSON.stringify({ is_online: isOnline }), // FIXED
+    body: JSON.stringify({ is_online: isOnline }),
   });
 }
 
@@ -59,10 +92,26 @@ export async function uploadWorkerAvatar(workerId, file) {
     body: formData,
   });
 }
+
+// Catalog
 export function getServiceCatalog() {
   return apiFetch(`/api/service-catalog`);
 }
 
 export function getServiceByCode(serviceCode) {
   return apiFetch(`/api/service-catalog/${serviceCode}`);
+}
+
+// CUSTOMER
+export function getCustomer(userId) {
+  return apiFetch(`/api/user/${userId}`);
+}
+
+export function getCustomerOrders(userId) {
+  return apiFetch(`/api/user/${userId}/orders`);
+}
+
+// WORKER CHECK
+export function checkIfUserIsWorker(userId) {
+  return apiFetch(`/api/user/${userId}/is-worker`);
 }

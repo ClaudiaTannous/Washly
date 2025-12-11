@@ -11,7 +11,7 @@ import { Switch } from "./ui/switch";
 import { Checkbox } from "./ui/checkbox";
 import { Droplets } from "lucide-react";
 
-import { signupWorker, getServiceCatalog } from "../lib/apiClient";
+import { createWorker, getServiceCatalog } from "../lib/apiClient";
 
 export default function WorkerSignupPage({ onSignupComplete }) {
   // NEW: load services from backend
@@ -101,7 +101,7 @@ export default function WorkerSignupPage({ onSignupComplete }) {
         service_codes: chosenServices, // later you handle linking in backend
       };
 
-      const createdWorker = await signupWorker(payload);
+      const createdWorker = await createWorker(payload);
 
       if (onSignupComplete) onSignupComplete(createdWorker);
     } catch (err) {

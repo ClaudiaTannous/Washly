@@ -25,27 +25,46 @@ dotenv.config();
 
 const app = express();
 
-// Ensure uploads folder exists
+/* ---------------------------------------------------
+   REQUIRED FOR COOKIE AUTH TO WORK CROSS-ORIGIN
+--------------------------------------------------- */
+app.set("trust proxy", 1);
+
+/* ---------------------------------------------------
+   CORS CONFIG — FIXED FOR COOKIES
+--------------------------------------------------- */
+app.use(
+  cors({
+    origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
+    credentials: true, // 🔥 MUST BE TRUE FOR COOKIES
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
+/* ---------------------------------------------------
+   MIDDLEWARES
+--------------------------------------------------- */
+app.use(cookieParser());
+app.use(express.json());
+
+/* ---------------------------------------------------
+   Ensure uploads folder exists
+--------------------------------------------------- */
 const uploadRoot = path.join(__dirname, "uploads");
 const avatarFolder = path.join(uploadRoot, "avatars");
 
 if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot);
 if (!fs.existsSync(avatarFolder)) fs.mkdirSync(avatarFolder);
 
-// Enable CORS
-app.use(
-  cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
-    credentials: true,
-  })
-);
-
-app.use(cookieParser());
-app.use(express.json());
-
-// 🔹 Make uploaded images publicly accessible
+/* ---------------------------------------------------
+   Static Serving for Uploads
+--------------------------------------------------- */
 app.use("/uploads", express.static(uploadRoot));
 
+/* ---------------------------------------------------
+   HEALTH + BASE ROUTES
+--------------------------------------------------- */
 app.get("/", (req, res) => {
   res.send("Washly backend is running");
 });
@@ -68,7 +87,9 @@ app.get("/test-db", async (_req, res) => {
   }
 });
 
-// 🔹 API routes
+/* ---------------------------------------------------
+   API ROUTES
+--------------------------------------------------- */
 app.use("/api", authRoutes);
 app.use("/api", userRoutes);
 app.use("/api", workerRoutes);
@@ -77,7 +98,9 @@ app.use("/api", orderRoutes);
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
 
-// 🔹 Start server
+/* ---------------------------------------------------
+   START SERVER
+--------------------------------------------------- */
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

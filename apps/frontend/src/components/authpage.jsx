@@ -33,37 +33,22 @@ export default function AuthPage() {
       const res = await fetch("http://localhost:5000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include", // 🔥 MUST BE INCLUDED for cookies
         body: JSON.stringify({
           email: loginEmail,
           password: loginPassword,
         }),
       });
 
-      if (res.status === 404) {
-        setLoginError("Email not found. Please register first.");
-        return;
-      }
-
-      if (res.status === 401) {
-        setLoginError("Incorrect password. Try again.");
-        return;
-      }
-
-      if (!res.ok) {
-        setLoginError("Something went wrong. Try again later.");
-        return;
-      }
-
       const data = await res.json();
 
-      // SAVE TOKEN
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
+      if (res.status === 404) return setLoginError("Email not found.");
+      if (res.status === 401) return setLoginError("Incorrect password.");
+      if (!res.ok) return setLoginError("Error logging in.");
 
-      // ✅ SAVE USER ID (THE MISSING PART!)
+      // 🔥 Save ONLY the userId (NOT the token)
       if (data.user?.id) {
-        localStorage.setItem("userId", data.user.id.toString());
+        localStorage.setItem("userId", data.user.id);
       }
 
       window.location.href = "/customer";

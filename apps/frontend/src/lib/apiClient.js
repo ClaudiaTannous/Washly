@@ -1,12 +1,16 @@
+"use client"; // IMPORTANT: apiClient must run on the client side
+
 const API_BASE_URL = "http://localhost:5000";
 
-// Universal fetch wrapper
+/* -----------------------------------------------------
+   UNIVERSAL API WRAPPER
+----------------------------------------------------- */
 export async function apiFetch(path, options = {}) {
   const url = `${API_BASE_URL}${path}`;
 
   const defaultHeaders = {};
 
-  // Only set content-type if body is JSON
+  // Only add JSON header if body is JSON, not FormData
   if (options.body && !(options.body instanceof FormData)) {
     defaultHeaders["Content-Type"] = "application/json";
   }
@@ -18,7 +22,7 @@ export async function apiFetch(path, options = {}) {
       ...(options.headers || {}),
     },
     body: options.body,
-    credentials: "include", // 🔥 NECESSARY FOR COOKIE JWT AUTH
+    credentials: "include", // Required for cookie-based JWT
   };
 
   const res = await fetch(url, finalOptions);
@@ -58,10 +62,16 @@ export function logout() {
    WORKERS
 ----------------------------------------------------- */
 
-export function createWorker(data) {
-  return apiFetch(`/api/workers`, {
+export async function createWorker(payload) {
+  const token = localStorage.getItem("token");
+
+  return apiFetch("/api/workers", {
     method: "POST",
-    body: JSON.stringify(data),
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -109,15 +119,15 @@ export function uploadWorkerAvatar(workerId, file) {
 }
 
 /* -----------------------------------------------------
-   CATALOG
+   SERVICE CATALOG
 ----------------------------------------------------- */
 
 export function getServiceCatalog() {
-  return apiFetch(`/api/service-catalog`);
+  return apiFetch(`/api/services`);
 }
 
 export function getServiceByCode(code) {
-  return apiFetch(`/api/service-catalog/${code}`);
+  return apiFetch(`/api/services/${code}`);
 }
 
 /* -----------------------------------------------------

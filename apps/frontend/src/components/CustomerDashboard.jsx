@@ -234,12 +234,18 @@ export function CustomerDashboard({
 
         <div className="flex gap-2">
           <Button
-            onClick={onNavigateToWorkerDashboard}
+            onClick={() => {
+              if (isWorker) {
+                window.location.href = "/worker"; // User is already a worker
+              } else {
+                window.location.href = "/worker/signup"; // Not a worker → go sign up
+              }
+            }}
             variant="outline"
             className="rounded-xl border-slate-300 hover:bg-white/70"
           >
             <TrendingUp className="w-4 h-4 text-cyan-600 mr-2" />
-            Worker Dashboard
+            {isWorker ? "Worker Dashboard" : "Become a Worker"}
           </Button>
 
           <Button variant="outline" className="rounded-xl border-slate-300">

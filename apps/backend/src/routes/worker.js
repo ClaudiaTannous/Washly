@@ -1,3 +1,4 @@
+// routes/worker.js
 const express = require("express");
 const path = require("path");
 const multer = require("multer");
@@ -11,21 +12,21 @@ const {
   updateWorkerSchedule,
   setWorkerOnlineStatus,
   getWorkers,
-  uploadWorkerAvatar, // 👈 NEW
+  uploadWorkerAvatar,
 } = require("../controllers/worker");
 
 const { getWorkerOrderHistory } = require("../controllers/order");
-const { requireAuth } = require("../middlewares/auth");
+
+// Middlewares
+const { requireAuth, requireWorker } = require("../middlewares/auth");
 
 const router = express.Router();
 
-/* ------------ Multer setup for avatar uploads ------------ */
-
-// files will be saved under: <backend-root>/uploads/avatars
+/* ----------------------------------------------------
+   MULTER CONFIGURATION FOR AVATAR UPLOAD
+---------------------------------------------------- */
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/avatars");
-  },
+  destination: (req, file, cb) => cb(null, "uploads/avatars"),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `worker-${req.params.id}-${Date.now()}${ext}`);
@@ -34,41 +35,65 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-/* ----------------------------- Routes ----------------------------- */
+/* ----------------------------------------------------
+   PUBLIC ROUTES  (NO AUTH REQUIRED)
+---------------------------------------------------- */
 
-// Get workers list with filters
-// (IMPORTANT: keep this before /workers/:id routes)
+// ✔ Public: Get list of workers
 router.get("/workers", getWorkers);
 
-// Create worker
-router.post("/workers", requireAuth, createWorker);
-
-// Get worker by ID
+// ✔ Public: Get worker by ID
 router.get("/workers/:id", getWorkerById);
 
-// Update worker
-router.put("/workers/:id", updateWorker);
+/* ----------------------------------------------------
+   PROTECTED ROUTES (USER MUST BE LOGGED IN)
+---------------------------------------------------- */
 
-// Delete worker
-router.delete("/workers/:id", deleteWorker);
+// ✔ Create worker profile (User → Worker)
+router.post("/workers", requireAuth, createWorker);
 
-// Get worker orders
-router.get("/workers/:id/orders", getWorkerOrders);
+/* ----------------------------------------------------
+   WORKER-ONLY ROUTES (MUST BE LOGGED IN + MUST BE WORKER)
+---------------------------------------------------- */
 
-// Update weekly schedule
-router.put("/workers/:id/schedule", updateWorkerSchedule);
+// ✔ Update worker profile
+router.put("/workers/:id", requireAuth, requireWorker, updateWorker);
 
-// Set worker online/offline
-router.patch("/workers/:id/online", setWorkerOnlineStatus);
+// ✔ Delete worker profile
+router.delete("/workers/:id", requireAuth, requireWorker, deleteWorker);
 
-// Get worker order history
-router.get("/workers/:id/orders/history", getWorkerOrderHistory);
+// ✔ Worker orders (current/upcoming/today)
+router.get("/workers/:id/orders", requireAuth, requireWorker, getWorkerOrders);
 
-// 👇 NEW: upload / change worker avatar
-// Frontend sends multipart/form-data with field name "avatar"
+// ✔ Order history
+router.get(
+  "/workers/:id/orders/history",
+  requireAuth,
+  requireWorker,
+  getWorkerOrderHistory
+);
+
+// ✔ Update business hours schedule
+router.put(
+  "/workers/:id/schedule",
+  requireAuth,
+  requireWorker,
+  updateWorkerSchedule
+);
+
+// ✔ Toggle worker online/offline
+router.patch(
+  "/workers/:id/online",
+  requireAuth,
+  requireWorker,
+  setWorkerOnlineStatus
+);
+
+// ✔ Upload worker avatar
 router.post(
   "/workers/:id/avatar",
   requireAuth,
+  requireWorker,
   upload.single("avatar"),
   uploadWorkerAvatar
 );

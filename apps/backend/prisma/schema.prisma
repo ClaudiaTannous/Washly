@@ -106,7 +106,7 @@ model WorkerService {
   worker_id                  BigInt
   service_code               String
   is_active                  Boolean        @default(true)
-  base_price                 Int            @default(0)    // 👈 your addition
+  base_price                 Int            @default(0)    // your addition
   min_qty                    Decimal?
   max_qty                    Decimal?
   turnaround_proximate_hours Int?
@@ -127,13 +127,13 @@ model Order {
   pickup_city              String
   pickup_street            String
   pickup_building          Int?
-  pickup_apartment_house   Int          // 👈 required
+  pickup_apartment_house   Int           // required
   pickup_floor             Int?
 
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
-  delivery_apartment_house Int          // 👈 required
+  delivery_apartment_house Int           // required
   delivery_floor           Int?
 
   scheduled_pickup         DateTime?

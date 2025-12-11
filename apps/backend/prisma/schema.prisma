@@ -36,8 +36,8 @@ enum PaymentStatus {
 //
 
 model User {
-  id                     BigInt       @id @default(autoincrement())
-  email                  String       @unique
+  id                     BigInt              @id @default(autoincrement())
+  email                  String              @unique
   password_hash          String
   first_name             String
   last_name              String
@@ -49,14 +49,14 @@ model User {
   apartment_house_number Int?
   floor_number           Int?
   description            String?
-  created_at             DateTime     @default(now())
-  updated_at             DateTime     @default(now())
+  created_at             DateTime            @default(now())
+  updated_at             DateTime            @default(now())
   MediaAssets            MediaAsset[]
-  OrdersAsCustomer       Order[]      @relation("orders_as_customer")
-  RatingsAuthored        Rating[]     @relation("rating_rater")
+  OrdersAsCustomer       Order[]             @relation("orders_as_customer")
+  RatingsAuthored        Rating[]            @relation("rating_rater")
   Worker                 Worker?
   PaymentProofsUploaded  OrderPaymentProof[] @relation("OrderPaymentProof_User")
-  
+
   @@index([email])
 }
 
@@ -106,7 +106,7 @@ model WorkerService {
   worker_id                  BigInt
   service_code               String
   is_active                  Boolean        @default(true)
-  base_price                 Int            @default(0)   
+  base_price                 Int            @default(0)    // 👈 your addition
   min_qty                    Decimal?
   max_qty                    Decimal?
   turnaround_proximate_hours Int?
@@ -127,23 +127,21 @@ model Order {
   pickup_city              String
   pickup_street            String
   pickup_building          Int?
-  pickup_apartment_house   Int
+  pickup_apartment_house   Int          // 👈 required
   pickup_floor             Int?
 
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
-  delivery_apartment_house Int
+  delivery_apartment_house Int          // 👈 required
   delivery_floor           Int?
 
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
 
-
   items_count              Int           @default(0)
   washes_count             Int           @default(0)
 
- 
   payment_method           PaymentMethod @default(CASH)
   payment_status           PaymentStatus @default(UNPAID)
   payment_confirmed_at     DateTime?
@@ -162,7 +160,7 @@ model Order {
 }
 
 model MediaAsset {
-  id            BigInt         @id @default(autoincrement())
+  id            BigInt              @id @default(autoincrement())
   owner_user_id BigInt
   url           String
   mime_type     String
@@ -170,8 +168,8 @@ model MediaAsset {
   width_px      Int?
   height_px     Int?
   checksum_sha1 String?
-  created_at    DateTime       @default(now())
-  Owner         User           @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
+  created_at    DateTime            @default(now())
+  Owner         User                @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
   Variants      MediaVariant[]
   RatingPhotos  RatingPhoto[]
   PaymentProofs OrderPaymentProof[] @relation("OrderPaymentProof_Media")

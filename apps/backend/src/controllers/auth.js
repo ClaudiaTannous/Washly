@@ -23,12 +23,13 @@ exports.login = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: "Invalid email or password" });
-    }
+  return res.status(404).json({ error: "Email not found" });
+}
+
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return res.status(401).json({ error: "Invalid email or password" });
+      return res.status(401).json({ error: "Incorrect password" });
     }
 
     const role = user.Worker ? "worker" : "customer";

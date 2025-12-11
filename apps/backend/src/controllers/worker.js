@@ -1,6 +1,8 @@
-
 const prisma = require("../prisma");
 
+// =======================
+// CREATE WORKER
+// =======================
 exports.createWorker = async (req, res) => {
   try {
     // 🔐 take user id from JWT, not from body
@@ -74,12 +76,9 @@ exports.createWorker = async (req, res) => {
   }
 };
 
-
-
 // ---------------------------
 // GET WORKERS LIST WITH FILTERS
 // ---------------------------
-// GET /workers?city=Haifa&minPrice=20&maxPrice=50&serviceCode=WASH&serviceActive=true&pickupAvailable=true&online=true
 exports.getWorkers = async (req, res) => {
   try {
     const {
@@ -177,7 +176,6 @@ exports.getWorkers = async (req, res) => {
   }
 };
 
-
 // ---------------------------
 // GET WORKER BY ID
 // ---------------------------
@@ -226,11 +224,9 @@ exports.updateWorker = async (req, res) => {
       delivery_available,
       description,
       image_url,
-
       is_online,
       max_orders_per_day,
       min_notice_minutes,
-
       max_items_per_wash,
       price_per_wash,
     } = req.body;
@@ -371,8 +367,6 @@ exports.getWorkerOrders = async (req, res) => {
 // ---------------------------
 // UPDATE WORKER WEEKLY SCHEDULE
 // ---------------------------
-// PUT /worker/:id/schedule
-// Body: [{ day_of_week, start_hhmm, end_hhmm }, ...]
 exports.updateWorkerSchedule = async (req, res) => {
   try {
     const { id } = req.params;
@@ -417,8 +411,6 @@ exports.updateWorkerSchedule = async (req, res) => {
 // ---------------------------
 // SET WORKER ONLINE / OFFLINE
 // ---------------------------
-// PATCH /worker/:id/online
-// Body: { is_online: true/false }
 exports.setWorkerOnlineStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -452,6 +444,50 @@ exports.setWorkerOnlineStatus = async (req, res) => {
     return res.json(updated);
   } catch (error) {
     console.error("Set Worker Online Status Error:", error);
+
+    if (error.code === "P2025") {
+      return res.status(404).json({ error: "Worker not found" });
+    }
+
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ---------------------------
+// UPLOAD / CHANGE WORKER AVATAR
+// ---------------------------
+// POST /workers/:id/avatar
+// (multer puts the file on disk and sets req.file)
+exports.uploadWorkerAvatar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid worker id format" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const workerId = BigInt(id);
+
+    // URL that the frontend can reach (served from index.js with app.use("/uploads", express.static(...)))
+    const imageUrl = `/uploads/avatars/${req.file.filename}`;
+
+    const updatedWorker = await prisma.worker.update({
+      where: { id: workerId },
+      data: { image_url: imageUrl },
+      include: {
+        user: true,
+        Services: true,
+        Hours: true,
+      },
+    });
+
+    return res.json(updatedWorker);
+  } catch (error) {
+    console.error("Upload Worker Avatar Error:", error);
 
     if (error.code === "P2025") {
       return res.status(404).json({ error: "Worker not found" });

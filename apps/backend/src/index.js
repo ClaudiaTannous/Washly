@@ -73,7 +73,7 @@ app.get("/", (req, res) => {
 app.get("/healthz", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+  res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -98,7 +98,7 @@ app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
-app.use("/api", searchRoutes); // 👈 keep your search route
+app.use("/api", searchRoutes); // 👈 keep search
 
 /* ---------------------------------------------------
    START SERVER

@@ -1,4 +1,3 @@
-const prisma = require("../prisma");
 const bcrypt = require("bcrypt");
 
 exports.createUser = async (req, res) => {
@@ -252,5 +251,72 @@ exports.checkIfUserIsWorker = async (req, res) => {
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: error.message });
+  }
+};
+const prisma = require("../prisma");
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ error: "Email and password required" });
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user)
+      return res.status(401).json({ error: "Invalid email or password" });
+
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match)
+      return res.status(401).json({ error: "Invalid email or password" });
+
+    // create JWT
+    const token = jwt.sign(
+      { userId: user.id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        first_name: user.first_name,
+        last_name: user.last_name,
+      },
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: err.message });
+  }
+};
+exports.getCurrentUser = async (req, res) => {
+  try {
+    const userId = BigInt(req.user.userId);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        phone: true,
+        country_name: true,
+        city_name: true,
+        street_name: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    return res.json(user);
+  } catch (err) {
+    console.error("getCurrentUser error:", err);
+    return res.status(500).json({ error: err.message });
   }
 };

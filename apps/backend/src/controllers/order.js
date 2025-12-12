@@ -18,6 +18,7 @@ const PAYMENT_METHODS = ["CASH", "BIT"];
 // ---------------------------
 exports.createOrder = async (req, res) => {
   try {
+    console.log("createOrder req.body:", JSON.stringify(req.body, null, 2));
     const body = req.body;
 
     // 1) Validate required fields from client

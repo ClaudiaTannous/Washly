@@ -21,6 +21,7 @@ const orderRoutes = require("./routes/order");
 const serviceCatalogRoutes = require("./routes/serviceCatalog");
 const workerServiceRoutes = require("./routes/workerService");
 const ratingRoutes = require("./routes/ratings");
+const searchRoutes = require("./routes/search"); // your route
 
 dotenv.config();
 
@@ -32,12 +33,12 @@ const app = express();
 app.set("trust proxy", 1);
 
 /* ---------------------------------------------------
-   CORS CONFIG — FIXED FOR COOKIES
+   CORS CONFIG — WITH COOKIES
 --------------------------------------------------- */
 app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
-    credentials: true, // 🔥 MUST BE TRUE FOR COOKIES
+    credentials: true, // cookies
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
@@ -99,6 +100,7 @@ app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
+app.use("/api", searchRoutes); // keep search
 app.use("/api", ratingRoutes);
 
 /* ---------------------------------------------------

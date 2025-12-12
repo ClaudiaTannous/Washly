@@ -44,18 +44,18 @@ export async function apiFetch(path, options = {}) {
 ----------------------------------------------------- */
 
 export function login(email, password) {
-  return apiFetch("/auth/login", {
+  return apiFetch("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
 }
 
 export function getCurrentUser() {
-  return apiFetch("/auth/me", { method: "GET" });
+  return apiFetch("/api/auth/me", { method: "GET" });
 }
 
 export function logout() {
-  return apiFetch("/auth/logout", { method: "POST" });
+  return apiFetch("/api/auth/logout", { method: "POST" });
 }
 
 /* -----------------------------------------------------
@@ -63,14 +63,8 @@ export function logout() {
 ----------------------------------------------------- */
 
 export async function createWorker(payload) {
-  const token = localStorage.getItem("token");
-
   return apiFetch("/api/workers", {
     method: "POST",
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(payload),
   });
 }

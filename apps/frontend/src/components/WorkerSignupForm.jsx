@@ -97,8 +97,18 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
 
     try {
       await createWorker(payload);
-      onSwitchToLogin?.();
+
+      // ✅ Worker created successfully
+      window.location.href = "/worker";
     } catch (err) {
+      const msg = err.message || "";
+
+      // ✅ Worker already exists → redirect
+      if (msg.includes("Worker already exists")) {
+        window.location.href = "/worker";
+        return;
+      }
+
       console.error(err);
       alert("Worker signup failed.");
     }

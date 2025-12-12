@@ -51,7 +51,7 @@ model User {
   description            String?
   created_at             DateTime     @default(now())
   updated_at             DateTime     @default(now())
-  MediaAssets            MediaAsset[]
+
   OrdersAsCustomer       Order[]      @relation("orders_as_customer")
   RatingsAuthored        Rating[]     @relation("rating_rater")
   Worker                 Worker?
@@ -80,6 +80,7 @@ model Worker {
   user                User                  @relation(fields: [id], references: [id], onDelete: Cascade)
   Hours               WorkerBusinessHours[] @relation("WorkerHours")
   Services            WorkerService[]
+    AIConversations     AIConversation[]
 }
 
 model WorkerBusinessHours {
@@ -160,32 +161,31 @@ model Order {
   PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
 }
 
-model MediaAsset {
-  id            BigInt         @id @default(autoincrement())
-  owner_user_id BigInt
-  url           String
-  mime_type     String
-  bytes         BigInt
-  width_px      Int?
-  height_px     Int?
-  checksum_sha1 String?
-  created_at    DateTime       @default(now())
-  Owner         User           @relation(fields: [owner_user_id], references: [id], onDelete: Cascade)
-  Variants      MediaVariant[]
-  RatingPhotos  RatingPhoto[]
-  PaymentProofs OrderPaymentProof[] @relation("OrderPaymentProof_Media")
+enum AIMessageRole {
+  USER
+  AI
+}
+model AIConversation {
+  id        BigInt      @id @default(autoincrement())
+  workerId  BigInt
+  worker    Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+  messages  AIMessage[]
+
+  @@index([workerId])
 }
 
-model MediaVariant {
-  id        BigInt     @id @default(autoincrement())
-  media_id  BigInt
-  kind      String
-  url       String
-  width_px  Int?
-  height_px Int?
-  bytes     BigInt?
-  Media     MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
+model AIMessage {
+  id              BigInt          @id @default(autoincrement())
+  conversationId  BigInt
+  conversation    AIConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role            AIMessageRole
+  content         String
+  createdAt       DateTime        @default(now())
+
+  @@index([conversationId])
 }
+
 
 model Rating {
   id           BigInt        @id @default(autoincrement())
@@ -206,7 +206,7 @@ model RatingPhoto {
   rating_id BigInt
   media_id  BigInt
   is_cover  Boolean    @default(false)
-  Media     MediaAsset @relation(fields: [media_id], references: [id], onDelete: Cascade)
+
   Rating    Rating     @relation(fields: [rating_id], references: [id], onDelete: Cascade)
 
   @@index([rating_id])
@@ -220,7 +220,7 @@ model OrderPaymentProof {
   created_at  DateTime   @default(now())
 
   Order    Order      @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
-  Media    MediaAsset @relation("OrderPaymentProof_Media", fields: [media_id], references: [id], onDelete: Cascade)
+
   Uploader User       @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
 
   @@index([order_id])

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { checkIfUserIsWorker } from "../../../lib/apiClient";
+import { checkIfUserIsWorker } from "../../../../lib/apiClient";
 
 import { WorkerSignupForm } from "@/components/WorkerSignupForm";
 

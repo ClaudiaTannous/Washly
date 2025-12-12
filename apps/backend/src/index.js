@@ -20,6 +20,7 @@ const workerBusinessHoursRoutes = require("./routes/workerBusinessHours");
 const orderRoutes = require("./routes/order");
 const serviceCatalogRoutes = require("./routes/serviceCatalog");
 const workerServiceRoutes = require("./routes/workerService");
+const ratingRoutes = require("./routes/ratings");
 
 dotenv.config();
 
@@ -51,7 +52,8 @@ app.use(express.json());
 /* ---------------------------------------------------
    Ensure uploads folder exists
 --------------------------------------------------- */
-const uploadRoot = path.join(__dirname, "uploads");
+const uploadRoot = path.join(__dirname, "..", "uploads");
+
 const avatarFolder = path.join(uploadRoot, "avatars");
 
 if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot);
@@ -97,6 +99,7 @@ app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
+app.use("/api", ratingRoutes);
 
 /* ---------------------------------------------------
    START SERVER

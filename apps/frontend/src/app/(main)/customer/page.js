@@ -1,6 +1,6 @@
 "use client";
 
-import { CustomerDashboard } from "../../components/CustomerDashboard";
+import { CustomerDashboard } from "../../../components/CustomerDashboard";
 
 export default function Customer() {
   return (

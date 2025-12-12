@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import SearchFilters from '../../components/SearchFilters';
-import WorkerCard from '../../components/WorkerCard';
+import SearchFilters from '../../components/ui/SearchFilters';
+import WorkerCard from '../../components/ui/WorkerCard';
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';

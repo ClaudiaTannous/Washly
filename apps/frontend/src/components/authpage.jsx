@@ -132,6 +132,19 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#EBF8FB] to-[#C7ECF5]">
       <div className="relative w-[850px] h-[480px] rounded-2xl overflow-hidden washly-glow">
+        {/* STEADY LOGO */}
+        <img
+         src="/washly-logo (3).png"
+         alt="Washly Logo"
+         className="
+         absolute top-0 left-0
+         -translate-y-6
+         w-32 h-32
+         z-50
+         "
+
+         />
+
         {/* Sliding Panel Background */}
         <div
           className={`

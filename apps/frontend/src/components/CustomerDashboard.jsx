@@ -341,8 +341,6 @@ export function CustomerDashboard({
                 icon={Package}
                 title="No active orders"
                 description="Start by finding a worker in your area"
-                buttonLabel="Find Workers"
-                onClick={onNavigateToSearch}
               />
             )}
           </TabsContent>

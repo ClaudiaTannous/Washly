@@ -139,3 +139,9 @@ export function getCustomerOrders(userId) {
 export function checkIfUserIsWorker(userId) {
   return apiFetch(`/api/user/${userId}/is-worker`);
 }
+export function addWorkerBusinessHoursBulk(workerId, hours) {
+  return apiFetch(`/api/workers/${workerId}/hours/bulk`, {
+    method: "POST",
+    body: JSON.stringify(hours),
+  });
+}

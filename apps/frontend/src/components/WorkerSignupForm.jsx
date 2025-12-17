@@ -8,7 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Droplets, Briefcase, DollarSign, Clock, Package } from "lucide-react";
 
-import { createWorker, getServiceCatalog } from "../lib/apiClient";
+import {
+  createWorker,
+  getServiceCatalog,
+  addWorkerBusinessHoursBulk,
+} from "../lib/apiClient";
 
 export function WorkerSignupForm({ onSwitchToLogin }) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -37,6 +41,26 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
     }
     load();
   }, []);
+
+  const DAYS = [
+    { id: 0, label: "Sunday" },
+    { id: 1, label: "Monday" },
+    { id: 2, label: "Tuesday" },
+    { id: 3, label: "Wednesday" },
+    { id: 4, label: "Thursday" },
+    { id: 5, label: "Friday" },
+    { id: 6, label: "Saturday" },
+  ];
+
+  const [businessHours, setBusinessHours] = useState(
+    DAYS.reduce((acc, day) => {
+      acc[day.id] = {
+        enabled: false,
+        ranges: [{ start: "09:00", end: "17:00" }],
+      };
+      return acc;
+    }, {})
+  );
 
   // ------------------------------------------------------
   // WORKER FORM DATA
@@ -73,16 +97,22 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
   // ------------------------------------------------------
   // SUBMIT
   // ------------------------------------------------------
+  // ------------------------------------------------------
+  // SUBMIT
+  // ------------------------------------------------------
   const handleSubmit = async () => {
+    // Step 2 validation
     if (!isStep2Valid()) {
       alert("Please select at least one service.");
       return;
     }
 
+    // Build selected services
     const chosenServices = serviceOptions
       .filter((svc) => selectedServices[svc.service_code])
       .map((svc) => svc.service_code);
 
+    // Worker payload (unchanged)
     const payload = {
       is_professional: formData.isProfessional,
       pickup_available: formData.pickupAvailable,
@@ -96,14 +126,38 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
     };
 
     try {
-      await createWorker(payload);
+      // 1️⃣ Create worker
+      const worker = await createWorker(payload);
+      const workerId = worker.id;
 
-      // ✅ Worker created successfully
+      // 2️⃣ Build business hours payload
+      const hoursPayload = [];
+
+      Object.entries(businessHours).forEach(([day, data]) => {
+        if (!data.enabled) return;
+
+        data.ranges.forEach((range) => {
+          if (!range.start || !range.end) return;
+
+          hoursPayload.push({
+            day_of_week: Number(day),
+            start_hhmm: range.start,
+            end_hhmm: range.end,
+          });
+        });
+      });
+
+      // 3️⃣ Save business hours (only if any were selected)
+      if (hoursPayload.length > 0) {
+        await addWorkerBusinessHoursBulk(workerId, hoursPayload);
+      }
+
+      // 4️⃣ Redirect
       window.location.href = "/worker";
     } catch (err) {
       const msg = err.message || "";
 
-      // ✅ Worker already exists → redirect
+      // Worker already exists → redirect
       if (msg.includes("Worker already exists")) {
         window.location.href = "/worker";
         return;
@@ -133,7 +187,7 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
 
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-6 px-4">
-          {[1, 2].map((step) => (
+          {[1, 2, 3].map((step) => (
             <div key={step} className="flex items-center flex-1">
               <div className="flex flex-col items-center w-full">
                 <div
@@ -145,16 +199,22 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
                 >
                   {step}
                 </div>
+
                 <span
                   className={`mt-2 text-sm ${
                     currentStep >= step ? "text-[#26c6da]" : "text-slate-400"
                   }`}
                 >
-                  {step === 1 ? "Worker Info" : "Services"}
+                  {step === 1
+                    ? "Worker Info"
+                    : step === 2
+                    ? "Services"
+                    : "Hours"}
                 </span>
               </div>
 
-              {step < 2 && (
+              {/* Connector line */}
+              {step < 3 && (
                 <div
                   className={`h-1 flex-1 mx-2 rounded ${
                     currentStep > step
@@ -324,6 +384,64 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
               )}
             </div>
           )}
+          {/* STEP 3 — Business Hours */}
+          {currentStep === 3 && (
+            <div className="space-y-4">
+              <Label className="text-slate-700">Business Hours</Label>
+
+              {DAYS.map((day) => {
+                const data = businessHours[day.id];
+
+                return (
+                  <div key={day.id} className="bg-white/40 p-4 rounded-xl">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Checkbox
+                        checked={data.enabled}
+                        onCheckedChange={(v) =>
+                          setBusinessHours((prev) => ({
+                            ...prev,
+                            [day.id]: { ...prev[day.id], enabled: v },
+                          }))
+                        }
+                      />
+                      <span className="text-slate-700">{day.label}</span>
+                    </div>
+
+                    {data.enabled &&
+                      data.ranges.map((range, idx) => (
+                        <div key={idx} className="flex gap-3">
+                          <Input
+                            type="time"
+                            value={range.start}
+                            onChange={(e) => {
+                              const ranges = [...data.ranges];
+                              ranges[idx].start = e.target.value;
+                              setBusinessHours((prev) => ({
+                                ...prev,
+                                [day.id]: { ...prev[day.id], ranges },
+                              }));
+                            }}
+                          />
+
+                          <Input
+                            type="time"
+                            value={range.end}
+                            onChange={(e) => {
+                              const ranges = [...data.ranges];
+                              ranges[idx].end = e.target.value;
+                              setBusinessHours((prev) => ({
+                                ...prev,
+                                [day.id]: { ...prev[day.id], ranges },
+                              }));
+                            }}
+                          />
+                        </div>
+                      ))}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Navigation Buttons */}
           <div className="flex gap-3 pt-4">
@@ -343,13 +461,15 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
               onClick={() => {
                 if (currentStep === 1 && isStep1Valid) {
                   setCurrentStep(2);
-                } else if (currentStep === 2) {
+                } else if (currentStep === 2 && isStep2Valid()) {
+                  setCurrentStep(3);
+                } else if (currentStep === 3) {
                   handleSubmit();
                 }
               }}
               className="flex-1 bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white"
             >
-              {currentStep === 2 ? "Create Worker Account" : "Continue"}
+              {currentStep === 3 ? "Create Worker Account" : "Continue"}
             </Button>
           </div>
         </div>

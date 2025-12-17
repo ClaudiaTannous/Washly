@@ -38,6 +38,15 @@ import {
 import { RatingSection } from "./RatingSection";
 
 const BACKEND_URL = "http://localhost:5000";
+const DAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
 
 /* ---------------- STATUS CONFIG ---------------- */
 const statusConfig = {
@@ -293,7 +302,10 @@ export function WorkerDashboard() {
               />
             </div>
 
-            <Button variant="outline">
+            <Button
+              variant="outline"
+              onClick={() => router.push("/worker/settings")}
+            >
               <Settings className="w-4 h-4" />
             </Button>
 
@@ -316,6 +328,27 @@ export function WorkerDashboard() {
             </Button>
           </div>
         </div>
+        {/* WORKER DESCRIPTION */}
+        <Card className="bg-white rounded-2xl shadow-md border border-slate-100 mb-10">
+          <div className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-[#4dd0e1] to-[#26c6da] rounded-xl flex items-center justify-center">
+                <User className="w-6 h-6 text-white" />
+              </div>
+              <h2 className="text-xl font-semibold text-slate-800">About Me</h2>
+            </div>
+
+            {worker.description ? (
+              <p className="text-slate-700 leading-relaxed whitespace-pre-line">
+                {worker.description}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-500 italic">
+                No description provided yet.
+              </p>
+            )}
+          </div>
+        </Card>
 
         {/* PROFILE SUMMARY */}
         <Card className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-2xl mb-10 shadow-md">
@@ -370,7 +403,7 @@ export function WorkerDashboard() {
                       className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"
                     >
                       <span className="text-slate-700 font-medium">
-                        Day {h.day_of_week}
+                        {DAY_NAMES[h.day_of_week]}
                       </span>
                       <span className="text-slate-600">
                         {h.start_hhmm} – {h.end_hhmm}
@@ -401,14 +434,19 @@ export function WorkerDashboard() {
                   {services.map((s) => (
                     <div
                       key={s.service_code}
-                      className="flex items-center justify-between p-4 bg-gradient-to-r from-[#e0f7fa] to-white rounded-xl hover:shadow-md transition-shadow"
+                      className="p-4 bg-gradient-to-r from-[#e0f7fa] to-white rounded-xl hover:shadow-md transition-shadow"
                     >
-                      <span className="font-medium text-slate-800">
-                        {s.service_code}
-                      </span>
-                      <span className="text-lg font-semibold text-[#26c6da]">
-                        ₪{s.base_price}
-                      </span>
+                      {/* Service Name */}
+                      <div className="font-medium text-slate-800">
+                        {s.Service?.display_name}
+                      </div>
+
+                      {/* Service Description */}
+                      {s.Service?.description && (
+                        <p className="text-sm text-slate-600 mt-1">
+                          {s.Service.description}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

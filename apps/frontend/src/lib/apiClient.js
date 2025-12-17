@@ -81,13 +81,6 @@ export function getWorkerOrderHistory(workerId) {
   return apiFetch(`/api/workers/${workerId}/orders/history`);
 }
 
-export function updateWorker(workerId, data) {
-  return apiFetch(`/api/workers/${workerId}`, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  });
-}
-
 export function updateWorkerSchedule(workerId, rules) {
   return apiFetch(`/api/workers/${workerId}/schedule`, {
     method: "PUT",
@@ -214,4 +207,75 @@ export function getWorkerServices(workerId) {
 
 export function getWorkerBusinessHours(workerId) {
   return apiFetch(`/api/workers/${workerId}/hours`);
+}
+export function updateWorkerBusinessHours(
+  workerId,
+  { day_of_week, start_hhmm },
+  { new_start_hhmm, new_end_hhmm }
+) {
+  const query = new URLSearchParams({
+    day_of_week,
+    start_hhmm,
+  }).toString();
+
+  return apiFetch(`/api/workers/${workerId}/hours?${query}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      new_start_hhmm,
+      new_end_hhmm,
+    }),
+  });
+}
+export async function updateWorker(workerId, data) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/workers/${workerId}`,
+    {
+      method: "PUT", // 🔴 IMPORTANT (not PATCH)
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update worker");
+  }
+
+  return res.json();
+}
+/* -----------------------------------------------------
+   WORKER SERVICES (CRUD)
+----------------------------------------------------- */
+
+// CREATE
+export function createWorkerService(workerId, payload) {
+  return apiFetch(`/api/workers/${workerId}/services`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// UPDATE
+export function updateWorkerService(workerId, serviceCode, payload) {
+  return apiFetch(`/api/workers/${workerId}/services/${serviceCode}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+// DELETE
+export function deleteWorkerService(workerId, serviceCode) {
+  return apiFetch(`/api/workers/${workerId}/services/${serviceCode}`, {
+    method: "DELETE",
+  });
+}
+export function addWorkerBusinessHours(workerId, hour) {
+  // hour = { day_of_week, start_hhmm, end_hhmm }
+  return apiFetch(`/api/workers/${workerId}/hours`, {
+    method: "POST",
+    body: JSON.stringify(hour),
+  });
 }

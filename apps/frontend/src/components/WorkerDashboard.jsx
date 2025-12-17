@@ -31,6 +31,8 @@ import {
   getWorkerRatings,
   setWorkerOnlineStatus,
   uploadWorkerAvatar,
+  getWorkerServices,
+  getWorkerBusinessHours,
 } from "../lib/apiClient";
 
 import { RatingSection } from "./RatingSection";
@@ -87,6 +89,8 @@ export function WorkerDashboard() {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [onlineLoading, setOnlineLoading] = useState(false);
+  const [services, setServices] = useState([]);
+  const [businessHours, setBusinessHours] = useState([]);
 
   /* ---------------- LOAD DATA ---------------- */
   useEffect(() => {
@@ -102,6 +106,8 @@ export function WorkerDashboard() {
         const workerData = await getWorker(user.id);
         const workerOrders = await getWorkerOrders(user.id);
         const ratings = await getWorkerRatings(workerData.id);
+        const workerServices = await getWorkerServices(workerData.id);
+        const hours = await getWorkerBusinessHours(workerData.id);
 
         // Calculate rating statistics
         const total = ratings.length;
@@ -128,6 +134,8 @@ export function WorkerDashboard() {
 
         setWorker(workerData);
         setOrders(workerOrders || []);
+        setServices(workerServices || []);
+        setBusinessHours(hours || []);
       } catch (err) {
         router.replace("/worker/signup");
       } finally {
@@ -254,7 +262,6 @@ export function WorkerDashboard() {
                 }}
               />
 
-              {/* Hover overlay */}
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs pointer-events-none transition">
                 Change
               </div>
@@ -289,6 +296,7 @@ export function WorkerDashboard() {
             <Button variant="outline">
               <Settings className="w-4 h-4" />
             </Button>
+
             <Button
               className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl shadow-lg hover:opacity-90"
               onClick={() => router.push("/ai-assistant")}
@@ -311,7 +319,7 @@ export function WorkerDashboard() {
 
         {/* PROFILE SUMMARY */}
         <Card className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-2xl mb-10 shadow-md">
-          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
             <Summary
               label="Rating"
               value={ratingStats?.average.toFixed(1) ?? "0.0"}
@@ -330,8 +338,84 @@ export function WorkerDashboard() {
               label="Max orders/day"
               value={worker.max_orders_per_day ?? 0}
             />
+            <Summary
+              label="Min notice"
+              value={`${worker.min_notice_minutes ?? 0} min`}
+              icon={Clock}
+            />
           </div>
         </Card>
+
+        {/* BUSINESS HOURS + SERVICES */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+          {/* BUSINESS HOURS */}
+          <Card className="bg-white rounded-2xl shadow-md border border-slate-100">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#4dd0e1] to-[#26c6da] rounded-xl flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">
+                  Business Hours
+                </h2>
+              </div>
+
+              {businessHours.length === 0 ? (
+                <p className="text-sm text-slate-500">No hours defined</p>
+              ) : (
+                <div className="space-y-3">
+                  {businessHours.map((h, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0"
+                    >
+                      <span className="text-slate-700 font-medium">
+                        Day {h.day_of_week}
+                      </span>
+                      <span className="text-slate-600">
+                        {h.start_hhmm} – {h.end_hhmm}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* SERVICES OFFERED */}
+          <Card className="bg-white rounded-2xl shadow-md border border-slate-100">
+            <div className="p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#4dd0e1] to-[#26c6da] rounded-xl flex items-center justify-center">
+                  <Package className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-800">
+                  Services Offered
+                </h2>
+              </div>
+
+              {services.length === 0 ? (
+                <p className="text-sm text-slate-500">No services configured</p>
+              ) : (
+                <div className="space-y-4">
+                  {services.map((s) => (
+                    <div
+                      key={s.service_code}
+                      className="flex items-center justify-between p-4 bg-gradient-to-r from-[#e0f7fa] to-white rounded-xl hover:shadow-md transition-shadow"
+                    >
+                      <span className="font-medium text-slate-800">
+                        {s.service_code}
+                      </span>
+                      <span className="text-lg font-semibold text-[#26c6da]">
+                        ₪{s.base_price}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
 
         {/* STATS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -384,7 +468,6 @@ export function WorkerDashboard() {
           </TabsContent>
         </Tabs>
 
-        {/* ⭐ RATINGS SECTION — BOTTOM */}
         {ratingStats && (
           <div className="mt-16 pt-10 border-t border-slate-200">
             <RatingSection stats={ratingStats} reviews={reviews} />

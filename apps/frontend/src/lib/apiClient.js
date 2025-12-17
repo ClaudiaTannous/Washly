@@ -145,20 +145,7 @@ export function addWorkerBusinessHoursBulk(workerId, hours) {
     body: JSON.stringify(hours),
   });
 }
-/* -----------------------------------------------------
-   RATINGS
------------------------------------------------------ */
 
-/**
- * Create a rating (usually after order completion)
- * payload example:
- * {
- *   orderId,
- *   workerId,
- *   rating,
- *   comment
- * }
- */
 export function createRating({ orderId, raterId, workerId, score, comment }) {
   return apiFetch("/api/ratings", {
     method: "POST",
@@ -212,4 +199,19 @@ export function sendAIMessage(conversationId, text) {
     method: "POST",
     body: JSON.stringify({ content: text }),
   });
+}
+/* -----------------------------------------------------
+   WORKER SERVICES
+----------------------------------------------------- */
+
+export function getWorkerServices(workerId) {
+  return apiFetch(`/api/workers/${workerId}/services`);
+}
+
+/* -----------------------------------------------------
+   WORKER BUSINESS HOURS
+----------------------------------------------------- */
+
+export function getWorkerBusinessHours(workerId) {
+  return apiFetch(`/api/workers/${workerId}/hours`);
 }

@@ -5,6 +5,7 @@ import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import { useRouter } from "next/navigation";
 
 import {
   Package,
@@ -71,6 +72,7 @@ export function CustomerDashboard({
   onNavigateToSearch,
   onNavigateToWorkerDashboard,
 }) {
+  const router = useRouter();
   // ---------------- ORIGINAL WORKING LOGIC RESTORED ----------------
   const [activeTab, setActiveTab] = useState("active");
 
@@ -249,7 +251,11 @@ export function CustomerDashboard({
               {isWorker ? "Worker Dashboard" : "Become a Worker"}
             </Button>
 
-            <Button variant="outline" className="rounded-xl border-slate-300">
+            <Button
+              variant="outline"
+              className="rounded-xl border-slate-300"
+              onClick={() => router.push("/customer/settings")}
+            >
               <Settings className="w-5 h-5" />
             </Button>
 

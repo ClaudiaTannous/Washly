@@ -279,3 +279,23 @@ export function addWorkerBusinessHours(workerId, hour) {
     body: JSON.stringify(hour),
   });
 }
+export async function updateUser(userId, data) {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/api/user/${userId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include", // IMPORTANT (JWT cookie)
+      body: JSON.stringify(data),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update user");
+  }
+
+  return res.json();
+}

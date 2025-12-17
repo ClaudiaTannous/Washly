@@ -288,7 +288,6 @@ export function WorkerDashboard() {
               <h1 className="text-xl font-semibold text-slate-800">
                 Worker Dashboard
               </h1>
-              <p className="text-slate-600">Manage your service requests</p>
             </div>
           </div>
 
@@ -379,6 +378,56 @@ export function WorkerDashboard() {
           </div>
         </Card>
 
+        {/* STATS */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Stat
+            label="Pending"
+            value={pending.length}
+            icon={Clock}
+            color="blue"
+          />
+          <Stat
+            label="Active"
+            value={active.length}
+            icon={Package}
+            color="yellow"
+          />
+          <Stat
+            label="Completed"
+            value={completed.length}
+            icon={CheckCircle}
+            color="green"
+          />
+          <Stat
+            label="Revenue"
+            value={`₪${revenue}`}
+            icon={TrendingUp}
+            color="cyan"
+          />
+        </div>
+
+        {/* TABS */}
+        <Tabs defaultValue="pending">
+          <TabsList className="mb-6 bg-white border border-slate-100 rounded-xl">
+            <TabsTrigger value="pending">
+              Pending ({pending.length})
+            </TabsTrigger>
+            <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
+            <TabsTrigger value="completed">
+              Completed ({completed.length})
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pending">
+            <Orders orders={pending} Card={OrderCard} />
+          </TabsContent>
+          <TabsContent value="active">
+            <Orders orders={active} Card={OrderCard} />
+          </TabsContent>
+          <TabsContent value="completed">
+            <Orders orders={completed} Card={OrderCard} />
+          </TabsContent>
+        </Tabs>
         {/* BUSINESS HOURS + SERVICES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
           {/* BUSINESS HOURS */}
@@ -454,57 +503,6 @@ export function WorkerDashboard() {
             </div>
           </Card>
         </div>
-
-        {/* STATS */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Stat
-            label="Pending"
-            value={pending.length}
-            icon={Clock}
-            color="blue"
-          />
-          <Stat
-            label="Active"
-            value={active.length}
-            icon={Package}
-            color="yellow"
-          />
-          <Stat
-            label="Completed"
-            value={completed.length}
-            icon={CheckCircle}
-            color="green"
-          />
-          <Stat
-            label="Revenue"
-            value={`₪${revenue}`}
-            icon={TrendingUp}
-            color="cyan"
-          />
-        </div>
-
-        {/* TABS */}
-        <Tabs defaultValue="pending">
-          <TabsList className="mb-6 bg-white border border-slate-100 rounded-xl">
-            <TabsTrigger value="pending">
-              Pending ({pending.length})
-            </TabsTrigger>
-            <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
-            <TabsTrigger value="completed">
-              Completed ({completed.length})
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="pending">
-            <Orders orders={pending} Card={OrderCard} />
-          </TabsContent>
-          <TabsContent value="active">
-            <Orders orders={active} Card={OrderCard} />
-          </TabsContent>
-          <TabsContent value="completed">
-            <Orders orders={completed} Card={OrderCard} />
-          </TabsContent>
-        </Tabs>
 
         {ratingStats && (
           <div className="mt-16 pt-10 border-t border-slate-200">

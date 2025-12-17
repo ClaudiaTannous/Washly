@@ -22,6 +22,7 @@ const serviceCatalogRoutes = require("./routes/serviceCatalog");
 const workerServiceRoutes = require("./routes/workerService");
 const ratingRoutes = require("./routes/ratings");
 const searchRoutes = require("./routes/search"); // your route
+const aiRoutes = require("./routes/Ai");
 
 dotenv.config();
 
@@ -102,6 +103,7 @@ app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
 app.use("/api", searchRoutes); // keep search
 app.use("/api", ratingRoutes);
+app.use("/api", aiRoutes);
 
 /* ---------------------------------------------------
    START SERVER

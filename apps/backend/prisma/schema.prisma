@@ -167,6 +167,8 @@ model AIConversation {
   messages   AIMessage[]
 
   @@index([worker_id])
+  @@unique([worker_id])   
+
 }
 enum AIMessageRole {
   USER

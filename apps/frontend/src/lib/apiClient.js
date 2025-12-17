@@ -145,3 +145,71 @@ export function addWorkerBusinessHoursBulk(workerId, hours) {
     body: JSON.stringify(hours),
   });
 }
+/* -----------------------------------------------------
+   RATINGS
+----------------------------------------------------- */
+
+/**
+ * Create a rating (usually after order completion)
+ * payload example:
+ * {
+ *   orderId,
+ *   workerId,
+ *   rating,
+ *   comment
+ * }
+ */
+export function createRating({ orderId, raterId, workerId, score, comment }) {
+  return apiFetch("/api/ratings", {
+    method: "POST",
+    body: JSON.stringify({
+      orderId,
+      raterId,
+      workerId,
+      score,
+      comment,
+    }),
+  });
+}
+
+/**
+ * Get rating by order ID
+ * Used to check if an order was already rated
+ */
+export function getRatingByOrder(orderId) {
+  return apiFetch(`/api/ratings/order/${orderId}`, {
+    method: "GET",
+  });
+}
+
+/**
+ * Get all ratings for a worker
+ * Used for WorkerDashboard → RatingSection
+ */
+export function getWorkerRatings(workerId) {
+  return apiFetch(`/api/ratings/worker/${workerId}`, {
+    method: "GET",
+  });
+}
+
+/**
+ * Delete a rating (admin / moderation / user action)
+ */
+export function deleteRating(ratingId) {
+  return apiFetch(`/api/ratings/${ratingId}`, {
+    method: "DELETE",
+  });
+}
+
+// Get or create conversation
+export function getAIConversation(workerId) {
+  return apiFetch(`/api/ai/worker/${workerId}`);
+}
+
+// Send message to AI
+export function sendAIMessage(conversationId, text) {
+  return apiFetch(`/api/ai/${conversationId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ content: text }),
+  });
+}

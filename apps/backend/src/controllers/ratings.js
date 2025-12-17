@@ -133,7 +133,9 @@ exports.getRatingByOrder = async (req, res) => {
     }
 
     const rating = await prisma.rating.findUnique({
-      where: { order_id: BigInt(orderId) },
+      where: {
+        order_id: BigInt(orderId),
+      },
       include: {
         Rater: true,
         Worker: {
@@ -167,14 +169,21 @@ exports.getWorkerRatings = async (req, res) => {
   try {
     const { workerId } = req.params;
 
+    // 1️⃣ Validate workerId format
     if (!/^\d+$/.test(workerId)) {
       return res.status(400).json({ error: "Invalid worker id format" });
     }
 
+    // 2️⃣ Query ratings
     const ratings = await prisma.rating.findMany({
-      where: { rated_worker: BigInt(workerId) },
-      orderBy: { created_at: "desc" },
+      where: {
+        rated_worker: BigInt(workerId),
+      },
+      orderBy: {
+        created_at: "desc",
+      },
       include: {
+        // who wrote the rating
         Rater: {
           select: {
             id: true,
@@ -182,14 +191,20 @@ exports.getWorkerRatings = async (req, res) => {
             last_name: true,
           },
         },
-        Photos: {
-          include: {
-            Media: true,
+
+        // photos attached to rating (NO Media include – not in schema)
+        Photos: true,
+
+        // related order info (minimal, safe)
+        Order: {
+          select: {
+            id: true,
           },
         },
       },
     });
 
+    // 3️⃣ Return result
     return res.json(ratings);
   } catch (error) {
     console.error("Get Worker Ratings Error:", error);

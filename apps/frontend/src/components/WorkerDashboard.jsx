@@ -28,9 +28,13 @@ import {
   getCurrentUser,
   getWorker,
   getWorkerOrders,
+  getWorkerRatings,
   setWorkerOnlineStatus,
   uploadWorkerAvatar,
 } from "../lib/apiClient";
+
+import { RatingSection } from "./RatingSection";
+
 const BACKEND_URL = "http://localhost:5000";
 
 /* ---------------- STATUS CONFIG ---------------- */
@@ -79,6 +83,8 @@ export function WorkerDashboard() {
 
   const [worker, setWorker] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [ratingStats, setRatingStats] = useState(null);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [onlineLoading, setOnlineLoading] = useState(false);
 
@@ -95,6 +101,30 @@ export function WorkerDashboard() {
 
         const workerData = await getWorker(user.id);
         const workerOrders = await getWorkerOrders(user.id);
+        const ratings = await getWorkerRatings(workerData.id);
+
+        // Calculate rating statistics
+        const total = ratings.length;
+        const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+
+        ratings.forEach((r) => distribution[r.score]++);
+
+        const average =
+          total === 0
+            ? 0
+            : ratings.reduce((sum, r) => sum + r.score, 0) / total;
+
+        setRatingStats({ average, total, distribution });
+
+        setReviews(
+          ratings.map((r) => ({
+            id: r.id,
+            customer_name: `${r.Rater.first_name} ${r.Rater.last_name}`,
+            rating: r.score,
+            comment: r.comment,
+            date: r.created_at,
+          }))
+        );
 
         setWorker(workerData);
         setOrders(workerOrders || []);
@@ -259,7 +289,10 @@ export function WorkerDashboard() {
             <Button variant="outline">
               <Settings className="w-4 h-4" />
             </Button>
-            <Button className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl shadow-lg hover:opacity-90">
+            <Button
+              className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl shadow-lg hover:opacity-90"
+              onClick={() => router.push("/ai-assistant")}
+            >
               <MessageCircle className="w-4 h-4 mr-2" />
               AI Assistant
             </Button>
@@ -281,12 +314,12 @@ export function WorkerDashboard() {
           <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
             <Summary
               label="Rating"
-              value={worker.rating ?? "4.9"}
+              value={ratingStats?.average.toFixed(1) ?? "0.0"}
               icon={Star}
             />
             <Summary
               label="Reviews"
-              value={worker.review_count ?? 0}
+              value={ratingStats?.total ?? 0}
               icon={User}
             />
             <Summary
@@ -350,6 +383,13 @@ export function WorkerDashboard() {
             <Orders orders={completed} Card={OrderCard} />
           </TabsContent>
         </Tabs>
+
+        {/* ⭐ RATINGS SECTION — BOTTOM */}
+        {ratingStats && (
+          <div className="mt-16 pt-10 border-t border-slate-200">
+            <RatingSection stats={ratingStats} reviews={reviews} />
+          </div>
+        )}
       </div>
     </div>
   );

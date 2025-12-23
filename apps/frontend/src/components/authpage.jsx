@@ -1,7 +1,24 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
+
+  const router = useRouter();
+
+  useEffect(() => {
+    const consent = localStorage.getItem("washly-cookie-consent");
+    const userId = localStorage.getItem("userId");
+
+    console.log("CONSENT:", consent);
+    console.log("USER:", userId);
+
+    if (consent === "accepted" && userId) {
+      router.replace("/customer");
+    }
+  }, []);
+
+
   const [isLogin, setIsLogin] = useState(true);
 
   // === LOGIN STATES ===

@@ -7,10 +7,9 @@ export const metadata = {
 
 export default function MainLayoutWrapper({ children }) {
   return (
-    <html lang="en">
-      <body>
-        <MainLayout>{children}</MainLayout>
-      </body>
-    </html>
+    <MainLayout>
+      {children}
+    </MainLayout>
   );
 }
+

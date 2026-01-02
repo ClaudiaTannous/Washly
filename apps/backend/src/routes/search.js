@@ -2,42 +2,134 @@ const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma");
 
-// GET /api/search/workers
+/* -----------------------------
+   helpers
+------------------------------ */
+const parseBool = (v) => {
+  if (v === undefined) return undefined;
+  if (v === "true" || v === "1") return true;
+  if (v === "false" || v === "0") return false;
+  return undefined;
+};
+
+const parseCsv = (v) => {
+  if (!v) return [];
+  return String(v)
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+};
+
+const hhmmFromDate = (d) => {
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`; // must match your start_hhmm/end_hhmm format
+};
+
+/* -----------------------------
+   GET /api/search/cities
+------------------------------ */
+router.get("/search/cities", async (_req, res) => {
+  try {
+    const rows = await prisma.user.findMany({
+      select: { city_name: true },
+      distinct: ["city_name"],
+      orderBy: { city_name: "asc" },
+    });
+
+    const cities = rows.map((r) => (r.city_name || "").trim()).filter(Boolean);
+
+    res.json({ ok: true, data: cities });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+/* -----------------------------
+   GET /api/search/workers
+   Required:
+   - city
+   - pickup_at (ISO datetime)
+------------------------------ */
 router.get("/search/workers", async (req, res) => {
   try {
     const {
       q,
       city,
-      service_code,
+      pickup_at,
+
+      // services
+      service_code, // legacy (single)
+      service_codes, // NEW (csv list)
+
       is_professional,
       pickup,
       delivery,
       minRating,
       maxPrice,
+
       limit = 12,
       cursor,
-      worker_id, // 👈 NEW: allow filtering by a specific worker
+      worker_id,
     } = req.query;
+
+    // required fields
+    if (!city || String(city).trim() === "") {
+      return res.status(400).json({ ok: false, error: "city is required" });
+    }
+    if (!pickup_at || String(pickup_at).trim() === "") {
+      return res.status(400).json({ ok: false, error: "pickup_at is required" });
+    }
+
+    const pickupDate = new Date(pickup_at);
+    if (Number.isNaN(pickupDate.getTime())) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "pickup_at must be a valid datetime" });
+    }
+
+    const dayOfWeek = pickupDate.getDay(); // assumes your day_of_week uses JS 0..6
+    const hhmm = hhmmFromDate(pickupDate);
 
     const idFilter = worker_id ? BigInt(worker_id) : null;
 
+    // services wanted: multi + legacy single
+    const multi = parseCsv(service_codes);
+    const servicesWanted = [
+      ...multi,
+      ...(service_code ? [String(service_code).trim()] : []),
+    ].filter(Boolean);
+
+    const take = Math.min(Number(limit) || 12, 50);
+
+    const maxPriceNum =
+      maxPrice !== undefined && maxPrice !== ""
+        ? Number(maxPrice)
+        : undefined;
+    if (maxPriceNum !== undefined && Number.isNaN(maxPriceNum)) {
+      return res.status(400).json({ ok: false, error: "maxPrice must be a number" });
+    }
+
     const where = {
-      ...(idFilter ? { id: idFilter } : {}), // 👈 filter by worker id if provided
+      ...(idFilter ? { id: idFilter } : {}),
 
-      ...(is_professional !== undefined
-        ? { is_professional: is_professional === "true" }
-        : {}),
-      ...(pickup !== undefined
-        ? { pickup_available: pickup === "true" }
-        : {}),
-      ...(delivery !== undefined
-        ? { delivery_available: delivery === "true" }
+      ...(parseBool(is_professional) !== undefined
+        ? { is_professional: parseBool(is_professional) }
         : {}),
 
+      ...(parseBool(pickup) !== undefined
+        ? { pickup_available: parseBool(pickup) }
+        : {}),
+
+      ...(parseBool(delivery) !== undefined
+        ? { delivery_available: parseBool(delivery) }
+        : {}),
+
+      // city is required => always filter it
       user: {
-        ...(city
-          ? { city_name: { equals: city, mode: "insensitive" } }
-          : {}),
+        city_name: { equals: String(city).trim(), mode: "insensitive" },
+
         ...(q
           ? {
               OR: [
@@ -50,51 +142,105 @@ router.get("/search/workers", async (req, res) => {
           : {}),
       },
 
-      ...(service_code
+      // ✅ availability by business hours (day + time window)
+      Hours: {
+        some: {
+          day_of_week: dayOfWeek,
+          start_hhmm: { lte: hhmm },
+          end_hhmm: { gt: hhmm },
+        },
+      },
+
+      // ✅ optional services filter (multi)
+      ...(servicesWanted.length
         ? {
             Services: {
               some: {
-                service_code,
+                service_code: { in: servicesWanted },
                 is_active: true,
-                ...(maxPrice
-                  ? { base_price: { lte: maxPrice.toString() } }
-                  : {}),
+                ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
               },
             },
           }
         : {}),
     };
 
-    const workers = await prisma.worker.findMany({
+    // Fetch candidates
+    const workersRaw = await prisma.worker.findMany({
       where,
-      take: Number(limit),
+      take,
       ...(cursor ? { skip: 1, cursor: { id: BigInt(cursor) } } : {}),
       orderBy: [{ is_online: "desc" }, { id: "asc" }],
       include: {
         user: true,
+        Hours: true,
         Services: {
           where: {
             is_active: true,
-            ...(service_code ? { service_code } : {}),
+            ...(servicesWanted.length ? { service_code: { in: servicesWanted } } : {}),
+            ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
           },
-          include: { Service: true },
+          include: { Service: true }, // ServiceCatalog via relation field "Service"
         },
         RatingsReceived: true,
       },
     });
 
-    // compute rating avg + shape result
-    const result = workers
+    // Filter by min_notice_minutes (worker-specific notice)
+    const now = new Date();
+    const workersAfterNotice = workersRaw.filter((w) => {
+      const diffMinutes = (pickupDate.getTime() - now.getTime()) / 60000;
+      return diffMinutes >= (w.min_notice_minutes || 0);
+    });
+
+    // Filter by max_orders_per_day (capacity)
+    // Count scheduled_pickup on the pickup day per worker
+    const startOfDay = new Date(pickupDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(pickupDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const workerIds = workersAfterNotice.map((w) => w.id);
+    let ordersCountByWorker = new Map();
+
+    if (workerIds.length) {
+      const orders = await prisma.order.findMany({
+        where: {
+          worker_id: { in: workerIds },
+          scheduled_pickup: { gte: startOfDay, lte: endOfDay },
+          // ignore cancelled
+          status: { notIn: ["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"] },
+        },
+        select: { worker_id: true },
+      });
+
+      for (const o of orders) {
+        const key = o.worker_id.toString();
+        ordersCountByWorker.set(key, (ordersCountByWorker.get(key) || 0) + 1);
+      }
+    }
+
+    const workersAfterCapacity = workersAfterNotice.filter((w) => {
+      const cnt = ordersCountByWorker.get(w.id.toString()) || 0;
+      return cnt < (w.max_orders_per_day || 0);
+    });
+
+    // Shape + minRating filter
+    const minR = minRating !== undefined && minRating !== "" ? Number(minRating) : undefined;
+    if (minR !== undefined && Number.isNaN(minR)) {
+      return res.status(400).json({ ok: false, error: "minRating must be a number" });
+    }
+
+    const result = workersAfterCapacity
       .map((w) => {
         const avg =
           w.RatingsReceived.length > 0
-            ? w.RatingsReceived.reduce(
-                (sum, r) => sum + r.score,
-                0
-              ) / w.RatingsReceived.length
+            ? w.RatingsReceived.reduce((sum, r) => sum + r.score, 0) /
+              w.RatingsReceived.length
             : 0;
 
-        if (minRating && avg < Number(minRating)) return null;
+        if (minR !== undefined && avg < minR) return null;
 
         return {
           worker_id: w.id.toString(),
@@ -103,6 +249,7 @@ router.get("/search/workers", async (req, res) => {
           delivery_available: w.delivery_available,
           is_professional: w.is_professional,
           image_url: w.image_url,
+
           profile: {
             name: `${w.user.first_name} ${w.user.last_name}`,
             city: w.user.city_name,
@@ -111,17 +258,23 @@ router.get("/search/workers", async (req, res) => {
             phone: w.user.phone,
             description: w.description || w.user.description,
           },
+
           rating: {
-            avg: avg,
+            avg,
             count: w.RatingsReceived.length,
           },
+
+          hours: w.Hours.map((h) => ({
+            day_of_week: h.day_of_week,
+            start_hhmm: h.start_hhmm,
+            end_hhmm: h.end_hhmm,
+          })),
+
           services: w.Services.map((s) => ({
             service_code: s.service_code,
             name: s.Service.display_name,
             unit: s.Service.unit,
-            base_price: s.base_price
-              ? s.base_price.toString()
-              : null, // 👈 handle nullable Decimal
+            base_price: s.base_price ?? null,
             notes: s.notes,
           })),
         };
@@ -129,9 +282,7 @@ router.get("/search/workers", async (req, res) => {
       .filter(Boolean);
 
     const nextCursor =
-      workers.length > 0
-        ? workers[workers.length - 1].id.toString()
-        : null;
+      workersRaw.length > 0 ? workersRaw[workersRaw.length - 1].id.toString() : null;
 
     res.json({ ok: true, data: { items: result, nextCursor } });
   } catch (err) {

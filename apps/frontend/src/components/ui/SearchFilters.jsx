@@ -1,207 +1,185 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from "react";
 
-export default function SearchFilters({ onApply }) {
-  const [q, setQ] = useState('');
-  const [city, setCity] = useState('');
-  const [serviceCode, setServiceCode] = useState('');
-  const [isProfessional, setIsProfessional] = useState('');
-  const [pickup, setPickup] = useState('');
-  const [delivery, setDelivery] = useState('');
-  const [minRating, setMinRating] = useState('');
-  const [maxPrice, setMaxPrice] = useState('');
+export default function SearchFilters({
+  services = [],
+  servicesError = "",
+  value = {},
+  onChange,
+}) {
+  const [local, setLocal] = useState({
+    service_codes: value.service_codes ?? [],
+    is_professional: value.is_professional ?? "",
+    pickup: value.pickup ?? "",
+    delivery: value.delivery ?? "",
+    minRating: value.minRating ?? "",
+    maxPrice: value.maxPrice ?? "",
+  });
 
-  function handleApply() {
-    onApply({
-      q: q || undefined,
-      city: city || undefined,
-      service_code: serviceCode || undefined,
+  useEffect(() => {
+    setLocal({
+      service_codes: value.service_codes ?? [],
+      is_professional: value.is_professional ?? "",
+      pickup: value.pickup ?? "",
+      delivery: value.delivery ?? "",
+      minRating: value.minRating ?? "",
+      maxPrice: value.maxPrice ?? "",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(value)]);
+
+  function emit(nextLocal) {
+    onChange?.({
+      service_codes: nextLocal.service_codes?.length
+        ? nextLocal.service_codes
+        : undefined,
+
       is_professional:
-        isProfessional === '' ? undefined : isProfessional === 'true',
-      pickup: pickup === '' ? undefined : pickup === 'true',
-      delivery: delivery === '' ? undefined : delivery === 'true',
-      minRating: minRating === '' ? undefined : Number(minRating),
-      maxPrice: maxPrice === '' ? undefined : Number(maxPrice),
+        nextLocal.is_professional === ""
+          ? undefined
+          : nextLocal.is_professional === "true",
+      pickup:
+        nextLocal.pickup === "" ? undefined : nextLocal.pickup === "true",
+      delivery:
+        nextLocal.delivery === "" ? undefined : nextLocal.delivery === "true",
+      minRating:
+        nextLocal.minRating === "" ? undefined : Number(nextLocal.minRating),
+      maxPrice:
+        nextLocal.maxPrice === "" ? undefined : Number(nextLocal.maxPrice),
     });
   }
 
-  function handleReset() {
-    setQ('');
-    setCity('');
-    setServiceCode('');
-    setIsProfessional('');
-    setPickup('');
-    setDelivery('');
-    setMinRating('');
-    setMaxPrice('');
-    onApply({});
+  function update(patch) {
+    const next = { ...local, ...patch };
+    setLocal(next);
+    emit(next);
   }
 
-  const fieldStyle = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    marginBottom: '8px',
-  };
+  function toggleService(code) {
+    const exists = local.service_codes.includes(code);
+    const nextCodes = exists
+      ? local.service_codes.filter((x) => x !== code)
+      : [...local.service_codes, code];
 
-  const rowStyle = {
-    display: 'flex',
-    gap: '8px',
-  };
+    update({ service_codes: nextCodes });
+  }
 
-  const halfFieldStyle = {
-    ...fieldStyle,
-    flex: 1,
-  };
+  function reset() {
+    const next = {
+      service_codes: [],
+      is_professional: "",
+      pickup: "",
+      delivery: "",
+      minRating: "",
+      maxPrice: "",
+    };
+    setLocal(next);
+    emit(next);
+  }
 
-  const labelStyle = {
-    fontSize: '12px',
-    color: '#5b6b7b',
-  };
-
-  const inputStyle = {
-    borderRadius: '999px',
-    border: '1px solid #c3d7e5',
-    padding: '7px 11px',
-    fontSize: '13px',
-    background: '#ffffff',
-  };
-
-  const buttonsRowStyle = {
-    marginTop: '8px',
-    display: 'flex',
-    gap: '8px',
-  };
-
-  const btnPrimaryStyle = {
-    flex: 1,
-    borderRadius: '999px',
-    padding: '7px 0',
-    fontSize: '13px',
-    border: 'none',
-    cursor: 'pointer',
-    background: '#19b5d8',
-    color: '#ffffff',
-    boxShadow: '0 12px 26px rgba(25, 181, 216, 0.35)',
-  };
-
-  const btnOutlineStyle = {
-    flex: 1,
-    borderRadius: '999px',
-    padding: '7px 0',
-    fontSize: '13px',
-    border: '1px solid #86becc',
-    cursor: 'pointer',
-    background: '#ffffff',
-    color: '#1c6d86',
-  };
+  const label = "text-xs text-slate-500";
+  const select =
+    "w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400";
+  const input =
+    "w-full mt-1 px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400";
 
   return (
-    <div>
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Search term</label>
-        <input
-          style={inputStyle}
-          placeholder="Name, street, or description…"
-          value={q}
-          onChange={e => setQ(e.target.value)}
-        />
-      </div>
-
-      <div style={fieldStyle}>
-        <label style={labelStyle}>City</label>
-        <input
-          style={inputStyle}
-          placeholder="e.g. Haifa"
-          value={city}
-          onChange={e => setCity(e.target.value)}
-        />
-      </div>
-
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Service code</label>
-        <input
-          style={inputStyle}
-          placeholder="e.g. WASH_STD"
-          value={serviceCode}
-          onChange={e => setServiceCode(e.target.value)}
-        />
-      </div>
-
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Provider type</label>
-        <select
-          style={inputStyle}
-          value={isProfessional}
-          onChange={e => setIsProfessional(e.target.value)}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={reset}
+          className="text-sm px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
         >
-          <option value="">Any</option>
-          <option value="true">Professional / laundromat</option>
-          <option value="false">Private / student</option>
-        </select>
-      </div>
-
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Pickup</label>
-        <select
-          style={inputStyle}
-          value={pickup}
-          onChange={e => setPickup(e.target.value)}
-        >
-          <option value="">Doesn&apos;t matter</option>
-          <option value="true">Pickup available</option>
-          <option value="false">No pickup</option>
-        </select>
-      </div>
-
-      <div style={fieldStyle}>
-        <label style={labelStyle}>Delivery</label>
-        <select
-          style={inputStyle}
-          value={delivery}
-          onChange={e => setDelivery(e.target.value)}
-        >
-          <option value="">Doesn&apos;t matter</option>
-          <option value="true">Delivery available</option>
-          <option value="false">No delivery</option>
-        </select>
-      </div>
-
-      <div style={rowStyle}>
-        <div style={halfFieldStyle}>
-          <label style={labelStyle}>Minimum rating</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="0"
-            max="5"
-            step="0.5"
-            placeholder="e.g. 4"
-            value={minRating}
-            onChange={e => setMinRating(e.target.value)}
-          />
-        </div>
-        <div style={halfFieldStyle}>
-          <label style={labelStyle}>Maximum price</label>
-          <input
-            style={inputStyle}
-            type="number"
-            min="1"
-            placeholder="₪"
-            value={maxPrice}
-            onChange={e => setMaxPrice(e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div style={buttonsRowStyle}>
-        <button type="button" style={btnPrimaryStyle} onClick={handleApply}>
-          Search
-        </button>
-        <button type="button" style={btnOutlineStyle} onClick={handleReset}>
           Reset
         </button>
+      </div>
+
+      {/* Optional multi service */}
+      <div>
+        <label className={label}>Services (optional)</label>
+
+        {servicesError ? (
+          <div className="text-sm text-red-600 mt-2">{servicesError}</div>
+        ) : null}
+
+        <div className="mt-2 space-y-2 max-h-44 overflow-auto pr-1">
+          {services.map((s) => (
+            <label
+              key={s.service_code}
+              className="flex items-center gap-2 text-sm text-slate-700"
+            >
+              <input
+                type="checkbox"
+                checked={local.service_codes.includes(s.service_code)}
+                onChange={() => toggleService(s.service_code)}
+              />
+              <span>{s.display_name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className={label}>Provider type</label>
+        <select
+          className={select}
+          value={local.is_professional}
+          onChange={(e) => update({ is_professional: e.target.value })}
+        >
+          <option value="">Any</option>
+          <option value="true">Professional</option>
+          <option value="false">Private / Student</option>
+        </select>
+      </div>
+
+      <div>
+        <label className={label}>Pickup</label>
+        <select
+          className={select}
+          value={local.pickup}
+          onChange={(e) => update({ pickup: e.target.value })}
+        >
+          <option value="">Doesn&apos;t matter</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div>
+        <label className={label}>Delivery</label>
+        <select
+          className={select}
+          value={local.delivery}
+          onChange={(e) => update({ delivery: e.target.value })}
+        >
+          <option value="">Doesn&apos;t matter</option>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={label}>Minimum rating</label>
+          <input
+            className={input}
+            placeholder="e.g. 4"
+            value={local.minRating}
+            onChange={(e) => update({ minRating: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className={label}>Maximum price</label>
+          <input
+            className={input}
+            placeholder="₪"
+            value={local.maxPrice}
+            onChange={(e) => update({ maxPrice: e.target.value })}
+          />
+        </div>
       </div>
     </div>
   );

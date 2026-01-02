@@ -1,14 +1,15 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { CustomerDashboard } from "../../../components/CustomerDashboard";
 
 export default function Customer() {
+  const router = useRouter();
+
   return (
     <CustomerDashboard
-      onNavigateToSearch={() => (window.location.href = "/search")}
-      onNavigateToWorkerDashboard={() =>
-        (window.location.href = "/WorkerDashboard")
-      }
+      onNavigateToSearch={() => router.push("/workers")}
+      onNavigateToWorkerDashboard={() => router.push("/worker")}
     />
   );
 }

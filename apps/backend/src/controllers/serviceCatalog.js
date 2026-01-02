@@ -46,14 +46,22 @@ exports.createService = async (req, res) => {
 exports.getAllServices = async (_req, res) => {
   try {
     const items = await prisma.serviceCatalog.findMany({
-      orderBy: { service_code: "asc" },
+      select: {
+        service_code: true,
+        display_name: true,
+        unit: true,
+      },
+      orderBy: { display_name: "asc" },
     });
-    return res.json(items);
+
+    return res.json({ ok: true, data: items });
   } catch (error) {
     console.error("Get Services Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ ok: false, error: error.message });
   }
 };
+
+
 
 exports.getServiceByCode = async (req, res) => {
   try {

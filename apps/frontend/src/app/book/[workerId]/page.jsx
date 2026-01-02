@@ -1,36 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
-export default function BookPage() {
-  const params = useParams();              // ✅ get params from Next
-  const workerId = Number(params.workerId); // "5" -> 5
-  const customerUserId = 1;
-
-
-  console.log("WORKER ID FROM URL:", workerId);
-
-
-
-const [sameAsPickup, setSameAsPickup] = useState(false);
-
-function handleSameAsPickupToggle(e) {
-  const checked = e.target.checked;
-  setSameAsPickup(checked);
-
-  if (checked) {
-    // copy pickup -> delivery once when checkbox is turned on
-    setForm(prev => ({
-      ...prev,
-      delivery: { ...prev.pickup },
-    }));
-  }
+function hhmmToMinutes(hhmm) {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
 }
 
+export default function BookPage() {
+  const params = useParams();
+  const workerId = Number(params.workerId);
+  const customerUserId = 1;
+
+  const [sameAsPickup, setSameAsPickup] = useState(false);
 
   const [form, setForm] = useState({
     itemsCount: "",
@@ -58,6 +43,52 @@ function handleSameAsPickupToggle(e) {
   const [serverError, setServerError] = useState(null);
   const [success, setSuccess] = useState(false);
 
+  // ✅ NEW: worker business hours state
+  const [workerHours, setWorkerHours] = useState([]);
+  const [hoursLoading, setHoursLoading] = useState(true);
+  const [hoursError, setHoursError] = useState("");
+
+  // ✅ NEW: fetch hours for this worker
+  useEffect(() => {
+    async function loadHours() {
+      if (!workerId) return;
+
+      setHoursLoading(true);
+      setHoursError("");
+
+      try {
+        const base = API_BASE.replace(/\/$/, "");
+        const res = await fetch(`${base}/api/workers/${workerId}/hours`, {
+          credentials: "include",
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed to load worker hours");
+
+        setWorkerHours(Array.isArray(data) ? data : []);
+      } catch (e) {
+        setWorkerHours([]);
+        setHoursError(e.message || "Failed to load worker hours");
+      } finally {
+        setHoursLoading(false);
+      }
+    }
+
+    loadHours();
+  }, [workerId]);
+
+  function handleSameAsPickupToggle(e) {
+    const checked = e.target.checked;
+    setSameAsPickup(checked);
+
+    if (checked) {
+      setForm((prev) => ({
+        ...prev,
+        delivery: { ...prev.pickup },
+      }));
+    }
+  }
+
   function handleChange(path, value) {
     setForm((prev) => {
       const copy = structuredClone(prev);
@@ -70,10 +101,51 @@ function handleSameAsPickupToggle(e) {
     });
   }
 
+  // ✅ NEW: compute availability message for the chosen pickup time
+  const pickupAvailability = useMemo(() => {
+    if (!form.scheduledPickup) return { ok: true, msg: "" };
+
+    // If hours aren't loaded yet, don't block
+    if (hoursLoading) return { ok: true, msg: "" };
+
+    // If worker has no hours defined, don't block (or you can block if you want)
+    if (!workerHours || workerHours.length === 0) {
+      return { ok: true, msg: "" };
+    }
+
+    const dt = new Date(form.scheduledPickup);
+    if (Number.isNaN(dt.getTime())) return { ok: false, msg: "Invalid date/time" };
+
+    const day = dt.getDay(); // 0=Sun..6=Sat
+    const minutes = dt.getHours() * 60 + dt.getMinutes();
+
+    const intervals = workerHours
+      .filter((h) => h.day_of_week === day)
+      .map((h) => ({
+        start: hhmmToMinutes(h.start_hhmm),
+        end: hhmmToMinutes(h.end_hhmm),
+        label: `${h.start_hhmm}–${h.end_hhmm}`,
+      }));
+
+    if (intervals.length === 0) {
+      return { ok: false, msg: "Worker has no working hours for this day." };
+    }
+
+    const insideAny = intervals.some((i) => minutes >= i.start && minutes <= i.end);
+
+    if (!insideAny) {
+      return {
+        ok: false,
+        msg: `Pick a time within: ${intervals.map((i) => i.label).join(", ")}`,
+      };
+    }
+
+    return { ok: true, msg: "" };
+  }, [form.scheduledPickup, workerHours, hoursLoading]);
+
   function validateForm() {
     const newErrors = {};
 
-    // itemsCount
     if (!form.itemsCount) {
       newErrors.itemsCount = "Number of items is required";
     } else {
@@ -83,7 +155,6 @@ function handleSameAsPickupToggle(e) {
       }
     }
 
-    // scheduledPickup
     if (!form.scheduledPickup) {
       newErrors.scheduledPickup = "Pickup time is required";
     } else {
@@ -98,66 +169,39 @@ function handleSameAsPickupToggle(e) {
       }
     }
 
-    // helper for required city/street
-    function requireNonEmpty(key, value, label) {
-      if (!value || !value.trim()) {
-        newErrors[key] = `${label} is required`;
-      }
+    // ✅ NEW: availability check included in validation
+    if (!pickupAvailability.ok) {
+      newErrors.scheduledPickup = pickupAvailability.msg;
     }
 
-    // pickup city/street
+    function requireNonEmpty(key, value, label) {
+      if (!value || !value.trim()) newErrors[key] = `${label} is required`;
+    }
+
     requireNonEmpty("pickup.city", form.pickup.city, "Pickup city");
     requireNonEmpty("pickup.street", form.pickup.street, "Pickup street");
 
-    // delivery city/street
     requireNonEmpty("delivery.city", form.delivery.city, "Delivery city");
     requireNonEmpty("delivery.street", form.delivery.street, "Delivery street");
 
-    // helper for optional int
     function validateOptionalInt(key, value, label) {
       if (!value) return;
       const n = Number(value);
-      if (!Number.isInteger(n) || n < 0) {
-        newErrors[key] = `${label} must be a non-negative integer`;
-      }
+      if (!Number.isInteger(n) || n < 0) newErrors[key] = `${label} must be a non-negative integer`;
     }
 
-    // pickup numeric optional fields
-    validateOptionalInt(
-      "pickup.building",
-      form.pickup.building,
-      "Pickup building"
-    );
-    validateOptionalInt(
-      "pickup.apartmentHouse",
-      form.pickup.apartmentHouse,
-      "Pickup apartment / house"
-    );
+    validateOptionalInt("pickup.building", form.pickup.building, "Pickup building");
+    validateOptionalInt("pickup.apartmentHouse", form.pickup.apartmentHouse, "Pickup apartment / house");
     validateOptionalInt("pickup.floor", form.pickup.floor, "Pickup floor");
 
-    // delivery numeric optional fields
-    validateOptionalInt(
-      "delivery.building",
-      form.delivery.building,
-      "Delivery building"
-    );
-    validateOptionalInt(
-      "delivery.apartmentHouse",
-      form.delivery.apartmentHouse,
-      "Delivery apartment / house"
-    );
-    validateOptionalInt(
-      "delivery.floor",
-      form.delivery.floor,
-      "Delivery floor"
-    );
+    validateOptionalInt("delivery.building", form.delivery.building, "Delivery building");
+    validateOptionalInt("delivery.apartmentHouse", form.delivery.apartmentHouse, "Delivery apartment / house");
+    validateOptionalInt("delivery.floor", form.delivery.floor, "Delivery floor");
 
-    // payment method
     if (!["CASH", "BIT"].includes(form.paymentMethod)) {
       newErrors.paymentMethod = "Invalid payment method";
     }
 
-    // notes length
     if (form.notes && form.notes.length > 1000) {
       newErrors.notes = "Notes are too long (max 1000 characters)";
     }
@@ -184,28 +228,20 @@ function handleSameAsPickupToggle(e) {
         customerUserId,
         workerId,
         itemsCount: Number(form.itemsCount),
-        scheduledPickup: form.scheduledPickup, // backend parses to Date
+        scheduledPickup: form.scheduledPickup,
         pickup: {
           ...form.pickup,
-          building: form.pickup.building
-            ? Number(form.pickup.building)
-            : null,
-          apartmentHouse: form.pickup.apartmentHouse
-            ? Number(form.pickup.apartmentHouse)
-            : null,
+          building: form.pickup.building ? Number(form.pickup.building) : null,
+          apartmentHouse: form.pickup.apartmentHouse ? Number(form.pickup.apartmentHouse) : null,
           floor: form.pickup.floor ? Number(form.pickup.floor) : null,
         },
         delivery: {
           ...form.delivery,
-          building: form.delivery.building
-            ? Number(form.delivery.building)
-            : null,
-          apartmentHouse: form.delivery.apartmentHouse
-            ? Number(form.delivery.apartmentHouse)
-            : null,
+          building: form.delivery.building ? Number(form.delivery.building) : null,
+          apartmentHouse: form.delivery.apartmentHouse ? Number(form.delivery.apartmentHouse) : null,
           floor: form.delivery.floor ? Number(form.delivery.floor) : null,
         },
-        paymentMethod: form.paymentMethod, // CASH or BIT
+        paymentMethod: form.paymentMethod,
         paymentNotes: null,
         notes: form.notes || null,
       };
@@ -218,16 +254,10 @@ function handleSameAsPickupToggle(e) {
       });
 
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to create order");
-      }
+      if (!res.ok) throw new Error(data.error || "Failed to create order");
 
-      console.log("Order created:", data);
       setSuccess(true);
-      // optional: reset form here
-      // setForm(...);
     } catch (err) {
-      console.error("Create order error:", err);
       setServerError(err.message || "Failed to create order");
     } finally {
       setSubmitting(false);
@@ -235,95 +265,73 @@ function handleSameAsPickupToggle(e) {
   }
 
   function handleReset() {
-  setForm({
-    itemsCount: "",
-    scheduledPickup: "",
-    pickup: {
-      city: "",
-      street: "",
-      building: "",
-      apartmentHouse: "",
-      floor: "",
-    },
-    delivery: {
-      city: "",
-      street: "",
-      building: "",
-      apartmentHouse: "",
-      floor: "",
-    },
-    paymentMethod: "CASH",
-    notes: "",
-  });
+    setForm({
+      itemsCount: "",
+      scheduledPickup: "",
+      pickup: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
+      delivery: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
+      paymentMethod: "CASH",
+      notes: "",
+    });
 
-  setErrors({});
-  setSuccess(false);
-  setServerError(null);
-}
+    setErrors({});
+    setSuccess(false);
+    setServerError(null);
+    setSameAsPickup(false);
+  }
 
+  const disableSubmit = submitting || !pickupAvailability.ok;
 
   return (
-  <div className="booking-page">
-    <div className="booking-card">
-      <header className="booking-header">
-        <h1>Book Laundry Service</h1>
-        <p>
-          Choose pickup time and address and we’ll calculate the washes
-          automatically.
-        </p>
-      </header>
+    <div className="booking-page">
+      <div className="booking-card">
+        <header className="booking-header">
+          <h1>Book Laundry Service</h1>
+          <p>Choose pickup time and address and we’ll calculate the washes automatically.</p>
+        </header>
 
-      {serverError && <div className="alert alert-error">{serverError}</div>}
-      {success && (
-        <div className="alert alert-success">
-          Booking created successfully! 🎉
-        </div>
-      )}
+        {/* ✅ Optional hours load message */}
+        {hoursError && <div className="alert alert-error">Hours error: {hoursError}</div>}
 
-      <form className="booking-form" onSubmit={handleSubmit}>
-        {/* TOP ROW: items + date */}
-        <section className="section">
-          <div className="row row-2">
-            <div className="field">
-              <label className="field-label">
-                Number of items
-                <span className="required-star">*</span>
-              </label>
-              <input
-                type="number"
-                min="1"
-                placeholder="e.g. 25"
-                value={form.itemsCount}
-                onChange={(e) =>
-                  handleChange(["itemsCount"], e.target.value)
-                }
-                required
-              />
-              {errors.itemsCount && (
-                <div className="field-error">{errors.itemsCount}</div>
-              )}
+        {serverError && <div className="alert alert-error">{serverError}</div>}
+        {success && <div className="alert alert-success">Booking created successfully! 🎉</div>}
+
+        <form className="booking-form" onSubmit={handleSubmit}>
+          <section className="section">
+            <div className="row row-2">
+              <div className="field">
+                <label className="field-label">
+                  Number of items <span className="required-star">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  placeholder="e.g. 25"
+                  value={form.itemsCount}
+                  onChange={(e) => handleChange(["itemsCount"], e.target.value)}
+                  required
+                />
+                {errors.itemsCount && <div className="field-error">{errors.itemsCount}</div>}
+              </div>
+
+              <div className="field">
+                <label className="field-label">
+                  Pickup date &amp; time <span className="required-star">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={form.scheduledPickup}
+                  onChange={(e) => handleChange(["scheduledPickup"], e.target.value)}
+                  required
+                />
+
+                {/* ✅ Availability error message shown here */}
+                {errors.scheduledPickup && (
+                  <div className="field-error">{errors.scheduledPickup}</div>
+                )}
+              </div>
             </div>
-
-            <div className="field">
-              <label className="field-label">
-                Pickup date &amp; time
-                <span className="required-star">*</span>
-              </label>
-              <input
-                type="datetime-local"
-                value={form.scheduledPickup}
-                onChange={(e) =>
-                  handleChange(["scheduledPickup"], e.target.value)
-                }
-                required
-              />
-              {errors.scheduledPickup && (
-                <div className="field-error">{errors.scheduledPickup}</div>
-              )}
-            </div>
-          </div>
-        </section>
-
+          </section>
         {/* PICKUP ADDRESS */}
         <section className="section">
           <h2>Pickup address</h2>

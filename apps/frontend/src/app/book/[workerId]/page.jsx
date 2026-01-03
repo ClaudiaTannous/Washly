@@ -1,39 +1,66 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
+import BookingPageView from "@/components/BookingPageView";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
-function hhmmToMinutes(hhmm) {
-  const [h, m] = hhmm.split(":").map(Number);
-  return h * 60 + m;
+const ISRAEL_CITIES = [
+  "Jerusalem",
+  "Tel Aviv-Yafo",
+  "Haifa",
+  "Rishon LeZion",
+  "Petah Tikva",
+  "Ashdod",
+  "Netanya",
+  "Be'er Sheva",
+  "Holon",
+  "Bnei Brak",
+  "Ramat Gan",
+  "Ashkelon",
+  "Rehovot",
+  "Bat Yam",
+  "Herzliya",
+  "Kfar Saba",
+  "Hadera",
+  "Modi'in-Maccabim-Re'ut",
+  "Ramla",
+  "Lod",
+  "Nazareth",
+  "Acre",
+  "Tiberias",
+  "Eilat",
+];
+
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 export default function BookPage() {
   const params = useParams();
-  const workerId = Number(params.workerId);
-  const customerUserId = 1;
+  const searchParams = useSearchParams();
 
+  const workerId = Number(params.workerId);
+  const customerUserId = 1; // TODO: replace later
+
+  const cityFromSearch = (searchParams.get("city") || "").trim();
+
+  const [step, setStep] = useState(1);
   const [sameAsPickup, setSameAsPickup] = useState(false);
 
+  // IMPORTANT: initialize EVERYTHING as strings so inputs are always controlled
   const [form, setForm] = useState({
     itemsCount: "",
     scheduledPickup: "",
-    pickup: {
-      city: "",
-      street: "",
-      building: "",
-      apartmentHouse: "",
-      floor: "",
-    },
-    delivery: {
-      city: "",
-      street: "",
-      building: "",
-      apartmentHouse: "",
-      floor: "",
-    },
+    pickup: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
+    delivery: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
     paymentMethod: "CASH",
     notes: "",
   });
@@ -43,44 +70,133 @@ export default function BookPage() {
   const [serverError, setServerError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // ✅ NEW: worker business hours state
+  const [provider, setProvider] = useState(null);
+  const [providerErr, setProviderErr] = useState("");
+
   const [workerHours, setWorkerHours] = useState([]);
   const [hoursLoading, setHoursLoading] = useState(true);
   const [hoursError, setHoursError] = useState("");
 
-  // ✅ NEW: fetch hours for this worker
-  useEffect(() => {
-    async function loadHours() {
-      if (!workerId) return;
+  // Load provider (use the search endpoint because it returns profile/services)
+ useEffect(() => {
+  if (!workerId) return;
 
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      setProviderErr("");
+      const base = API_BASE.replace(/\/$/, "");
+
+      // ✅ correct endpoint for “get worker by id”
+      const data = await fetchJson(`${base}/api/workers/${workerId}`, {
+        credentials: "include",
+        signal: controller.signal,
+      });
+
+      // handle different shapes safely
+      const worker =
+        data?.data?.worker ||
+        data?.data ||
+        data?.worker ||
+        data;
+
+      setProvider(worker);
+    } catch (e) {
+      // ✅ ignore AbortError (Next dev refresh / navigation)
+      if (e?.name === "AbortError" || String(e?.message).includes("aborted")) return;
+
+      setProvider(null);
+      setProviderErr(e?.message || "Failed to load provider");
+    }
+  })();
+
+  return () => controller.abort();
+}, [workerId]);
+
+
+  // Load worker hours
+  useEffect(() => {
+  if (!workerId) return;
+
+  const controller = new AbortController();
+
+  (async () => {
+    try {
       setHoursLoading(true);
       setHoursError("");
+      const base = API_BASE.replace(/\/$/, "");
 
-      try {
-        const base = API_BASE.replace(/\/$/, "");
-        const res = await fetch(`${base}/api/workers/${workerId}/hours`, {
-          credentials: "include",
-        });
+      const data = await fetchJson(`${base}/api/workers/${workerId}/hours`, {
+        credentials: "include",
+        signal: controller.signal,
+      });
 
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Failed to load worker hours");
+      const hours = data?.data || data;
+      setWorkerHours(Array.isArray(hours) ? hours : []);
+    } catch (e) {
+      if (e?.name === "AbortError" || String(e?.message).includes("aborted")) return;
 
-        setWorkerHours(Array.isArray(data) ? data : []);
-      } catch (e) {
-        setWorkerHours([]);
-        setHoursError(e.message || "Failed to load worker hours");
-      } finally {
-        setHoursLoading(false);
-      }
+      setWorkerHours([]);
+      setHoursError(e?.message || "Failed to load worker hours");
+    } finally {
+      setHoursLoading(false);
     }
+  })();
 
-    loadHours();
-  }, [workerId]);
+  return () => controller.abort();
+}, [workerId]);
 
-  function handleSameAsPickupToggle(e) {
-    const checked = e.target.checked;
+
+  // Auto-fill pickup/delivery city from ?city=
+  useEffect(() => {
+    if (!cityFromSearch) return;
+
+    setForm((prev) => {
+      // only auto-fill if empty (don’t overwrite user typing)
+      const pickupCity = prev.pickup.city || cityFromSearch;
+      const deliveryCity = prev.delivery.city || cityFromSearch;
+      return {
+        ...prev,
+        pickup: { ...prev.pickup, city: pickupCity },
+        delivery: { ...prev.delivery, city: deliveryCity },
+      };
+    });
+  }, [cityFromSearch]);
+
+  // Build dropdown options:
+  // show the selected city + worker city (if exists), otherwise fallback to full list
+  const cityOptions = useMemo(() => {
+    const s = new Set();
+    if (cityFromSearch) s.add(cityFromSearch);
+    const workerCity = provider?.profile?.city?.trim();
+    if (workerCity) s.add(workerCity);
+
+    const arr = Array.from(s).filter(Boolean);
+    return arr.length ? arr : ISRAEL_CITIES;
+  }, [cityFromSearch, provider]);
+
+  function handleChange(path, value) {
+    setForm((prev) => {
+      const copy = structuredClone(prev);
+      let obj = copy;
+      for (let i = 0; i < path.length - 1; i++) obj = obj[path[i]];
+      obj[path[path.length - 1]] = value;
+      return copy;
+    });
+
+    // clear error for that field when user edits
+    const key = path.join(".");
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function handleSameAsPickupToggle(checked) {
     setSameAsPickup(checked);
-
     if (checked) {
       setForm((prev) => ({
         ...prev,
@@ -89,172 +205,82 @@ export default function BookPage() {
     }
   }
 
-  function handleChange(path, value) {
-    setForm((prev) => {
-      const copy = structuredClone(prev);
-      let obj = copy;
-      for (let i = 0; i < path.length - 1; i++) {
-        obj = obj[path[i]];
+  function validateStep(nextStep) {
+    const e = {};
+
+    if (nextStep >= 1) {
+      if (!String(form.itemsCount || "").trim()) e["itemsCount"] = "Number of items is required";
+      if (!String(form.scheduledPickup || "").trim()) e["scheduledPickup"] = "Pickup date & time is required";
+    }
+
+    if (nextStep >= 2) {
+      if (!String(form.pickup.city || "").trim()) e["pickup.city"] = "Pickup city is required";
+      if (!String(form.pickup.street || "").trim()) e["pickup.street"] = "Pickup street is required";
+      if (!String(form.pickup.apartmentHouse || "").trim()) e["pickup.apartmentHouse"] = "Pickup apartment / house is required";
+
+      if (!sameAsPickup) {
+        if (!String(form.delivery.city || "").trim()) e["delivery.city"] = "Delivery city is required";
+        if (!String(form.delivery.street || "").trim()) e["delivery.street"] = "Delivery street is required";
+        if (!String(form.delivery.apartmentHouse || "").trim()) e["delivery.apartmentHouse"] = "Delivery apartment / house is required";
       }
-      obj[path[path.length - 1]] = value;
-      return copy;
-    });
+    }
+
+    setErrors(e);
+    return Object.keys(e).length === 0;
   }
 
-  // ✅ NEW: compute availability message for the chosen pickup time
-  const pickupAvailability = useMemo(() => {
-    if (!form.scheduledPickup) return { ok: true, msg: "" };
-
-    // If hours aren't loaded yet, don't block
-    if (hoursLoading) return { ok: true, msg: "" };
-
-    // If worker has no hours defined, don't block (or you can block if you want)
-    if (!workerHours || workerHours.length === 0) {
-      return { ok: true, msg: "" };
-    }
-
-    const dt = new Date(form.scheduledPickup);
-    if (Number.isNaN(dt.getTime())) return { ok: false, msg: "Invalid date/time" };
-
-    const day = dt.getDay(); // 0=Sun..6=Sat
-    const minutes = dt.getHours() * 60 + dt.getMinutes();
-
-    const intervals = workerHours
-      .filter((h) => h.day_of_week === day)
-      .map((h) => ({
-        start: hhmmToMinutes(h.start_hhmm),
-        end: hhmmToMinutes(h.end_hhmm),
-        label: `${h.start_hhmm}–${h.end_hhmm}`,
-      }));
-
-    if (intervals.length === 0) {
-      return { ok: false, msg: "Worker has no working hours for this day." };
-    }
-
-    const insideAny = intervals.some((i) => minutes >= i.start && minutes <= i.end);
-
-    if (!insideAny) {
-      return {
-        ok: false,
-        msg: `Pick a time within: ${intervals.map((i) => i.label).join(", ")}`,
-      };
-    }
-
-    return { ok: true, msg: "" };
-  }, [form.scheduledPickup, workerHours, hoursLoading]);
-
-  function validateForm() {
-    const newErrors = {};
-
-    if (!form.itemsCount) {
-      newErrors.itemsCount = "Number of items is required";
-    } else {
-      const n = Number(form.itemsCount);
-      if (!Number.isInteger(n) || n <= 0) {
-        newErrors.itemsCount = "Must be a positive whole number";
-      }
-    }
-
-    if (!form.scheduledPickup) {
-      newErrors.scheduledPickup = "Pickup time is required";
-    } else {
-      const dt = new Date(form.scheduledPickup);
-      if (Number.isNaN(dt.getTime())) {
-        newErrors.scheduledPickup = "Invalid date/time";
-      } else {
-        const now = new Date();
-        if (dt <= now) {
-          newErrors.scheduledPickup = "Pickup time must be in the future";
-        }
-      }
-    }
-
-    // ✅ NEW: availability check included in validation
-    if (!pickupAvailability.ok) {
-      newErrors.scheduledPickup = pickupAvailability.msg;
-    }
-
-    function requireNonEmpty(key, value, label) {
-      if (!value || !value.trim()) newErrors[key] = `${label} is required`;
-    }
-
-    requireNonEmpty("pickup.city", form.pickup.city, "Pickup city");
-    requireNonEmpty("pickup.street", form.pickup.street, "Pickup street");
-
-    requireNonEmpty("delivery.city", form.delivery.city, "Delivery city");
-    requireNonEmpty("delivery.street", form.delivery.street, "Delivery street");
-
-    function validateOptionalInt(key, value, label) {
-      if (!value) return;
-      const n = Number(value);
-      if (!Number.isInteger(n) || n < 0) newErrors[key] = `${label} must be a non-negative integer`;
-    }
-
-    validateOptionalInt("pickup.building", form.pickup.building, "Pickup building");
-    validateOptionalInt("pickup.apartmentHouse", form.pickup.apartmentHouse, "Pickup apartment / house");
-    validateOptionalInt("pickup.floor", form.pickup.floor, "Pickup floor");
-
-    validateOptionalInt("delivery.building", form.delivery.building, "Delivery building");
-    validateOptionalInt("delivery.apartmentHouse", form.delivery.apartmentHouse, "Delivery apartment / house");
-    validateOptionalInt("delivery.floor", form.delivery.floor, "Delivery floor");
-
-    if (!["CASH", "BIT"].includes(form.paymentMethod)) {
-      newErrors.paymentMethod = "Invalid payment method";
-    }
-
-    if (form.notes && form.notes.length > 1000) {
-      newErrors.notes = "Notes are too long (max 1000 characters)";
-    }
-
-    return newErrors;
+  function goNext() {
+    const nextStep = Math.min(3, step + 1);
+    if (!validateStep(nextStep)) return;
+    setStep(nextStep);
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
+  function goBack() {
+    setStep((s) => Math.max(1, s - 1));
+  }
+
+  async function handleSubmit() {
+    if (!validateStep(3)) return;
+
     setSubmitting(true);
     setServerError(null);
-    setSuccess(false);
-
-    const newErrors = validateForm();
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0) {
-      setSubmitting(false);
-      return;
-    }
 
     try {
       const body = {
-        customerUserId,
         workerId,
+        customerUserId,
         itemsCount: Number(form.itemsCount),
         scheduledPickup: form.scheduledPickup,
         pickup: {
           ...form.pickup,
           building: form.pickup.building ? Number(form.pickup.building) : null,
-          apartmentHouse: form.pickup.apartmentHouse ? Number(form.pickup.apartmentHouse) : null,
+          apartmentHouse: form.pickup.apartmentHouse ? String(form.pickup.apartmentHouse) : null,
           floor: form.pickup.floor ? Number(form.pickup.floor) : null,
         },
-        delivery: {
-          ...form.delivery,
-          building: form.delivery.building ? Number(form.delivery.building) : null,
-          apartmentHouse: form.delivery.apartmentHouse ? Number(form.delivery.apartmentHouse) : null,
-          floor: form.delivery.floor ? Number(form.delivery.floor) : null,
-        },
+        delivery: sameAsPickup
+          ? {
+              ...form.pickup,
+              building: form.pickup.building ? Number(form.pickup.building) : null,
+              apartmentHouse: form.pickup.apartmentHouse ? String(form.pickup.apartmentHouse) : null,
+              floor: form.pickup.floor ? Number(form.pickup.floor) : null,
+            }
+          : {
+              ...form.delivery,
+              building: form.delivery.building ? Number(form.delivery.building) : null,
+              apartmentHouse: form.delivery.apartmentHouse ? String(form.delivery.apartmentHouse) : null,
+              floor: form.delivery.floor ? Number(form.delivery.floor) : null,
+            },
         paymentMethod: form.paymentMethod,
-        paymentNotes: null,
         notes: form.notes || null,
       };
 
-      const res = await fetch(`${API_BASE}/api/orders`, {
+      const base = API_BASE.replace(/\/$/, "");
+      await fetchJson(`${base}/api/orders`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(body),
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to create order");
 
       setSuccess(true);
     } catch (err) {
@@ -268,320 +294,40 @@ export default function BookPage() {
     setForm({
       itemsCount: "",
       scheduledPickup: "",
-      pickup: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
-      delivery: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
+      pickup: { city: cityFromSearch || "", street: "", building: "", apartmentHouse: "", floor: "" },
+      delivery: { city: cityFromSearch || "", street: "", building: "", apartmentHouse: "", floor: "" },
       paymentMethod: "CASH",
       notes: "",
     });
-
     setErrors({});
     setSuccess(false);
     setServerError(null);
     setSameAsPickup(false);
+    setStep(1);
   }
 
-  const disableSubmit = submitting || !pickupAvailability.ok;
-
   return (
-    <div className="booking-page">
-      <div className="booking-card">
-        <header className="booking-header">
-          <h1>Book Laundry Service</h1>
-          <p>Choose pickup time and address and we’ll calculate the washes automatically.</p>
-        </header>
-
-        {/* ✅ Optional hours load message */}
-        {hoursError && <div className="alert alert-error">Hours error: {hoursError}</div>}
-
-        {serverError && <div className="alert alert-error">{serverError}</div>}
-        {success && <div className="alert alert-success">Booking created successfully! 🎉</div>}
-
-        <form className="booking-form" onSubmit={handleSubmit}>
-          <section className="section">
-            <div className="row row-2">
-              <div className="field">
-                <label className="field-label">
-                  Number of items <span className="required-star">*</span>
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  placeholder="e.g. 25"
-                  value={form.itemsCount}
-                  onChange={(e) => handleChange(["itemsCount"], e.target.value)}
-                  required
-                />
-                {errors.itemsCount && <div className="field-error">{errors.itemsCount}</div>}
-              </div>
-
-              <div className="field">
-                <label className="field-label">
-                  Pickup date &amp; time <span className="required-star">*</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  value={form.scheduledPickup}
-                  onChange={(e) => handleChange(["scheduledPickup"], e.target.value)}
-                  required
-                />
-
-                {/* ✅ Availability error message shown here */}
-                {errors.scheduledPickup && (
-                  <div className="field-error">{errors.scheduledPickup}</div>
-                )}
-              </div>
-            </div>
-          </section>
-        {/* PICKUP ADDRESS */}
-        <section className="section">
-          <h2>Pickup address</h2>
-
-          <div className="row row-2">
-            <div className="field">
-              <label className="field-label">
-                City
-                <span className="required-star">*</span>
-              </label>
-              <input
-                placeholder="city"
-                value={form.pickup.city}
-                onChange={(e) =>
-                  handleChange(["pickup", "city"], e.target.value)
-                }
-                required
-              />
-              {errors["pickup.city"] && (
-                <div className="field-error">{errors["pickup.city"]}</div>
-              )}
-            </div>
-            <div className="field">
-              <label className="field-label">
-                Street
-                <span className="required-star">*</span>
-              </label>
-              <input
-                placeholder="street"
-                value={form.pickup.street}
-                onChange={(e) =>
-                  handleChange(["pickup", "street"], e.target.value)
-                }
-                required
-              />
-              {errors["pickup.street"] && (
-                <div className="field-error">{errors["pickup.street"]}</div>
-              )}
-            </div>
-          </div>
-
-          <div className="row row-3">
-            <div className="field">
-              <label>Building</label>
-              <input
-                placeholder="building"
-                value={form.pickup.building}
-                onChange={(e) =>
-                  handleChange(["pickup", "building"], e.target.value)
-                }
-              />
-              {errors["pickup.building"] && (
-                <div className="field-error">{errors["pickup.building"]}</div>
-              )}
-            </div>
-            <div className="field">
-              <label className="field-label">
-                Apartment / House
-                <span className="required-star">*</span>
-              </label>
-              <input
-                placeholder="apartment / house"
-                value={form.pickup.apartmentHouse}
-                onChange={(e) =>
-                  handleChange(["pickup", "apartmentHouse"], e.target.value)
-                }
-                required
-              />
-              {errors["pickup.apartmentHouse"] && (
-                <div className="field-error">
-                  {errors["pickup.apartmentHouse"]}
-                </div>
-              )}
-            </div>
-            <div className="field">
-              <label>Floor</label>
-              <input
-                placeholder="floor"
-                value={form.pickup.floor}
-                onChange={(e) =>
-                  handleChange(["pickup", "floor"], e.target.value)
-                }
-              />
-              {errors["pickup.floor"] && (
-                <div className="field-error">{errors["pickup.floor"]}</div>
-              )}
-            </div>
-          </div>
-        </section>
-
-       {/* DELIVERY ADDRESS */}
-<section className="section">
-  <div className="same-address-row">
-    <h2>Delivery address</h2>
-
-   <label className="same-address-toggle">
-    <input
-    type="checkbox"
-    checked={sameAsPickup}
-    onChange={handleSameAsPickupToggle}
-  />
-  <span>Same as pickup</span>
-</label>
-
-  </div>
-
-  <div className="row row-2">
-    <div className="field">
-      <label className="field-label">
-        City
-        <span className="required-star">*</span>
-      </label>
-      <input
-        placeholder="city"
-        value={form.delivery.city}
-        onChange={(e) =>
-          handleChange(["delivery", "city"], e.target.value)
-        }
-        required
-      />
-      {errors["delivery.city"] && (
-        <div className="field-error">{errors["delivery.city"]}</div>
-      )}
-    </div>
-    <div className="field">
-      <label className="field-label">
-        Street
-        <span className="required-star">*</span>
-      </label>
-      <input
-        placeholder="street"
-        value={form.delivery.street}
-        onChange={(e) =>
-          handleChange(["delivery", "street"], e.target.value)
-        }
-        required
-      />
-      {errors["delivery.street"] && (
-        <div className="field-error">{errors["delivery.street"]}</div>
-      )}
-    </div>
-  </div>
-
-  <div className="row row-3">
-    <div className="field">
-      <label>Building</label>
-      <input
-        placeholder="building"
-        value={form.delivery.building}
-        onChange={(e) =>
-          handleChange(["delivery", "building"], e.target.value)
-        }
-      />
-      {errors["delivery.building"] && (
-        <div className="field-error">{errors["delivery.building"]}</div>
-      )}
-    </div>
-    <div className="field">
-      <label className="field-label">
-        Apartment / House
-        <span className="required-star">*</span>
-      </label>
-      <input
-        placeholder="apartment / house"
-        value={form.delivery.apartmentHouse}
-        onChange={(e) =>
-          handleChange(["delivery", "apartmentHouse"], e.target.value)
-        }
-        required
-      />
-      {errors["delivery.apartmentHouse"] && (
-        <div className="field-error">
-          {errors["delivery.apartmentHouse"]}
-        </div>
-      )}
-    </div>
-    <div className="field">
-      <label>Floor</label>
-      <input
-        placeholder="floor"
-        value={form.delivery.floor}
-        onChange={(e) =>
-          handleChange(["delivery", "floor"], e.target.value)
-        }
-      />
-      {errors["delivery.floor"] && (
-        <div className="field-error">{errors["delivery.floor"]}</div>
-      )}
-    </div>
-  </div>
-</section>
-
-        {/* PAYMENT + NOTES */}
-        <section className="section">
-          <h2>Payment</h2>
-
-          <div className="row row-2">
-            <div className="field">
-              <label className="field-label">
-                Payment method
-                <span className="required-star">*</span>
-              </label>
-              <select
-                value={form.paymentMethod}
-                onChange={(e) =>
-                  handleChange(["paymentMethod"], e.target.value)
-                }
-                required
-              >
-                <option value="CASH">Cash</option>
-                <option value="BIT">Bit</option>
-              </select>
-              {errors.paymentMethod && (
-                <div className="field-error">{errors.paymentMethod}</div>
-              )}
-            </div>
-
-            <div className="field field-notes">
-              <label>Anything the worker should know?</label>
-              <textarea
-                placeholder="Notes (optional)"
-                value={form.notes}
-                onChange={(e) =>
-                  handleChange(["notes"], e.target.value)
-                }
-              />
-              {errors.notes && (
-                <div className="field-error">{errors.notes}</div>
-              )}
-            </div>
-          </div>
-        </section>
-
-      <div className="actions">
-  <button
-    type="button"
-    className="reset-btn"
-    onClick={handleReset}
-    disabled={submitting}
-  >
-    Reset
-  </button>
-
-  <button type="submit" className="confirm-btn" disabled={submitting}>
-    {submitting ? "Booking..." : "Confirm booking"}
-  </button>
-</div>
-
-      </form>
-    </div>
-  </div>
-);
+    <BookingPageView
+      step={step}
+      setStep={setStep}
+      form={form}
+      sameAsPickup={sameAsPickup}
+      provider={provider}
+      providerErr={providerErr}
+      workerHours={workerHours}
+      hoursLoading={hoursLoading}
+      hoursError={hoursError}
+      errors={errors}
+      submitting={submitting}
+      success={success}
+      serverError={serverError}
+      cityOptions={cityOptions}
+      handleChange={handleChange}
+      handleSameAsPickupToggle={handleSameAsPickupToggle}
+      handleReset={handleReset}
+      goNext={goNext}
+      goBack={goBack}
+      handleSubmit={handleSubmit}
+    />
+  );
 }

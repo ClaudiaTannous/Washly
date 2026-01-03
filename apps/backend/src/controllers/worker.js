@@ -188,17 +188,14 @@ exports.getWorkerById = async (req, res) => {
     }
 
     const worker = await prisma.worker.findUnique({
-      where: { id: BigInt(id) },
-      include: {
-        user: true,
-        Services: true,
-        Hours: true,
-      },
-    });
+  where: { id: BigInt(req.params.id) },
+  include: { user: true }, // ✅ needed for name/city/street/phone
+});
 
-    if (!worker) {
-      return res.status(404).json({ error: "Worker not found" });
-    }
+if (!worker) return res.status(404).json({ ok: false, error: "Worker not found" });
+
+return res.json({ ok: true, data: worker }); // wrapping is fine now (frontend unwraps)
+
 
     return res.json(worker);
   } catch (error) {

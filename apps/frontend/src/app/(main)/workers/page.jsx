@@ -354,9 +354,14 @@ export default function WorkersSearchPage() {
                 )}
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {items.map((worker) => (
-                    <WorkerCard key={worker.worker_id} worker={worker} />
-                  ))}
+                 {items.map((worker) => (
+  <WorkerCard
+    key={worker.worker_id}
+    worker={worker}
+    selectedCity={city}   // ✅ IMPORTANT
+  />
+))}
+
                 </div>
 
                 <div className="py-8 flex justify-center">

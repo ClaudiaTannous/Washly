@@ -23,9 +23,8 @@ exports.login = async (req, res) => {
     });
 
     if (!user) {
-  return res.status(404).json({ error: "Email not found" });
-}
-
+      return res.status(404).json({ error: "Email not found" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
@@ -82,6 +81,7 @@ exports.me = async (req, res) => {
       first_name: user.first_name,
       last_name: user.last_name,
       role,
+      worker_id: user.Worker ? String(user.id) : null, // same id
     });
   } catch (err) {
     console.error("Me error:", err);

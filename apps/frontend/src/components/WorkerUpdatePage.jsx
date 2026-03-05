@@ -68,12 +68,25 @@ export default function WorkerUpdatePage({ worker }) {
       const h = await getWorkerBusinessHours(worker.id);
       const s = await getWorkerServices(worker.id);
       const catalog = await getServiceCatalog();
+      const catalogList = Array.isArray(catalog)
+        ? catalog
+        : (catalog.data ?? []);
+
+      setSelectedServices(s.map((x) => x.service_code));
+
+      setServices(
+        catalogList.map((s) => ({
+          // ← use catalogList, not catalog
+          service_code: s.service_code,
+          label: s.display_name,
+        })),
+      );
 
       setHours(
         (h || []).map((x) => ({
           ...x,
           original_start_hhmm: x.start_hhmm,
-        }))
+        })),
       );
 
       setSelectedServices(s.map((x) => x.service_code));
@@ -82,7 +95,7 @@ export default function WorkerUpdatePage({ worker }) {
         catalog.map((s) => ({
           service_code: s.service_code,
           label: s.display_name, // Prisma field
-        }))
+        })),
       );
     }
 
@@ -102,7 +115,7 @@ export default function WorkerUpdatePage({ worker }) {
         start_hhmm: "09:00",
         end_hhmm: "17:00",
         original_start_hhmm: "09:00",
-      }))
+      })),
     );
   }
 
@@ -148,7 +161,7 @@ export default function WorkerUpdatePage({ worker }) {
             day_of_week: h.day_of_week,
             start_hhmm: h.start_hhmm,
             end_hhmm: h.end_hhmm,
-          }))
+          })),
         );
       } else {
         for (const h of hours) {
@@ -161,7 +174,7 @@ export default function WorkerUpdatePage({ worker }) {
             {
               new_start_hhmm: h.start_hhmm,
               new_end_hhmm: h.end_hhmm,
-            }
+            },
           );
         }
       }
@@ -318,8 +331,8 @@ export default function WorkerUpdatePage({ worker }) {
                       p.map((x) =>
                         x.day_of_week === h.day_of_week
                           ? { ...x, start_hhmm: e.target.value }
-                          : x
-                      )
+                          : x,
+                      ),
                     )
                   }
                 />
@@ -332,8 +345,8 @@ export default function WorkerUpdatePage({ worker }) {
                       p.map((x) =>
                         x.day_of_week === h.day_of_week
                           ? { ...x, end_hhmm: e.target.value }
-                          : x
-                      )
+                          : x,
+                      ),
                     )
                   }
                 />
@@ -378,7 +391,7 @@ export default function WorkerUpdatePage({ worker }) {
                       setSelectedServices((p) =>
                         v
                           ? [...p, s.service_code]
-                          : p.filter((x) => x !== s.service_code)
+                          : p.filter((x) => x !== s.service_code),
                       )
                     }
                   />

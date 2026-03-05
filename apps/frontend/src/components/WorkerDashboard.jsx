@@ -107,15 +107,24 @@ export function WorkerDashboard() {
       try {
         setLoading(true);
         const user = await getCurrentUser();
+        console.log("USER OBJECT:", user);
+
         if (!user?.id) {
           router.replace("/signin");
           return;
         }
 
-        const workerData = await getWorker(user.id);
-        const workerOrders = await getWorkerOrders(user.id);
+        if (user.role !== "worker") {
+          router.replace("/worker/signup");
+          return;
+        }
+
+        const workerData = await getWorker(user.worker_id ?? user.id);
+        const workerOrders = await getWorkerOrders(workerData.id);
         const ratings = await getWorkerRatings(workerData.id);
         const workerServices = await getWorkerServices(workerData.id);
+        console.log("WORKER SERVICES:", workerServices); // ← ADD THIS
+
         const hours = await getWorkerBusinessHours(workerData.id);
 
         // Calculate rating statistics
@@ -138,7 +147,7 @@ export function WorkerDashboard() {
             rating: r.score,
             comment: r.comment,
             date: r.created_at,
-          }))
+          })),
         );
 
         setWorker(workerData);
@@ -146,6 +155,7 @@ export function WorkerDashboard() {
         setServices(workerServices || []);
         setBusinessHours(hours || []);
       } catch (err) {
+        console.error("LOAD ERROR:", err);
         router.replace("/worker/signup");
       } finally {
         setLoading(false);
@@ -167,7 +177,7 @@ export function WorkerDashboard() {
 
   const pending = normalizedOrders.filter((o) => o.status === "REQUESTED");
   const active = normalizedOrders.filter((o) =>
-    ["CONFIRMED", "IN_PROGRESS"].includes(o.status)
+    ["CONFIRMED", "IN_PROGRESS"].includes(o.status),
   );
   const completed = normalizedOrders.filter((o) => o.status === "COMPLETED");
   const revenue = completed.reduce((s, o) => s + (o.amount ?? 0), 0);
@@ -259,7 +269,7 @@ export function WorkerDashboard() {
             <div className="w-16 h-16 rounded-xl overflow-hidden relative group">
               <img
                 src={
-                  worker.image_url
+                  worker?.image_url
                     ? `${BACKEND_URL}${worker.image_url}`
                     : "/default-avatar.png"
                 }

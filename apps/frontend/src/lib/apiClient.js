@@ -69,10 +69,6 @@ export async function createWorker(payload) {
   });
 }
 
-export function getWorker(workerId) {
-  return apiFetch(`/api/workers/${workerId}`);
-}
-
 export function getWorkerOrders(workerId) {
   return apiFetch(`/api/workers/${workerId}/orders`);
 }
@@ -109,8 +105,9 @@ export function uploadWorkerAvatar(workerId, file) {
    SERVICE CATALOG
 ----------------------------------------------------- */
 
-export function getServiceCatalog() {
-  return apiFetch(`/api/services`);
+export async function getServiceCatalog() {
+  const res = await apiFetch(`/api/services`);
+  return res.data ?? res;
 }
 
 export function getServiceByCode(code) {
@@ -211,7 +208,7 @@ export function getWorkerBusinessHours(workerId) {
 export function updateWorkerBusinessHours(
   workerId,
   { day_of_week, start_hhmm },
-  { new_start_hhmm, new_end_hhmm }
+  { new_start_hhmm, new_end_hhmm },
 ) {
   const query = new URLSearchParams({
     day_of_week,
@@ -236,7 +233,7 @@ export async function updateWorker(workerId, data) {
       },
       credentials: "include",
       body: JSON.stringify(data),
-    }
+    },
   );
 
   if (!res.ok) {
@@ -289,7 +286,7 @@ export async function updateUser(userId, data) {
       },
       credentials: "include", // IMPORTANT (JWT cookie)
       body: JSON.stringify(data),
-    }
+    },
   );
 
   if (!res.ok) {
@@ -298,4 +295,8 @@ export async function updateUser(userId, data) {
   }
 
   return res.json();
+}
+export async function getWorker(workerId) {
+  const res = await apiFetch(`/api/workers/${workerId}`);
+  return res.data ?? res; // unwrap { ok, data } if present
 }

@@ -59,6 +59,7 @@ export default function WorkersSearchPage() {
 
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [sameCityWorkers, setSameCityWorkers] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -181,8 +182,20 @@ export default function WorkersSearchPage() {
         reset ? null : nextCursor
       );
 
-      setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
-      setNextCursor(data.nextCursor ?? null);
+     setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
+setNextCursor(data.nextCursor ?? null);
+
+// 👇 THIS IS THE IMPORTANT PART
+if (reset && data.items.length === 0 && submittedFilters?.city) {
+  const relaxedFilters = { ...submittedFilters };
+  delete relaxedFilters.pickup_at;
+
+  const relaxedData = await fetchWorkers(relaxedFilters);
+
+  setSameCityWorkers(relaxedData.items || []);
+} else if (reset) {
+  setSameCityWorkers([]);
+}
     } catch (e) {
       setError(e.message || "Search failed");
       if (reset) setItems([]);
@@ -340,16 +353,43 @@ export default function WorkersSearchPage() {
                   </div>
                 )}
 
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {items.map((worker) => (
-                    <WorkerCard
-                      key={worker.worker_id}
-                      worker={worker}
-                      selectedCity={city}
-                      onOpenDetails={openWorkerDetails}
-                    />
-                  ))}
-                </div>
+               {items.length > 0 ? (
+  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+    {items.map((worker) => (
+      <WorkerCard
+        key={worker.worker_id}
+        worker={worker}
+        selectedCity={city}
+        onOpenDetails={openWorkerDetails}
+      />
+    ))}
+  </div>
+) : (
+  <div className="mt-6 space-y-6">
+    <div className="text-center text-slate-600 text-sm">
+No workers match your selected time and filters.
+    </div>
+
+    {sameCityWorkers.length > 0 && (
+      <>
+        <div className="text-lg font-semibold text-slate-900">
+Workers in your area (not available at your selected time)
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {sameCityWorkers.slice(0, 4).map((worker) => (
+            <WorkerCard
+              key={worker.worker_id}
+              worker={worker}
+              selectedCity={city}
+              onOpenDetails={openWorkerDetails}
+            />
+          ))}
+        </div>
+      </>
+    )}
+  </div>
+)}
 
                 <div className="py-8 flex justify-center">
                   {nextCursor ? (

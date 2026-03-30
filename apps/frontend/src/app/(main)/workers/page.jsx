@@ -60,6 +60,7 @@ export default function WorkersSearchPage() {
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [sameCityWorkers, setSameCityWorkers] = useState([]);
+  const [alternativeTimeMatches, setAlternativeTimeMatches] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -128,6 +129,73 @@ export default function WorkersSearchPage() {
 
     return finalFilters;
   }
+  function buildAlternativePickupTimes(originalPickupAt) {
+  if (!originalPickupAt) return [];
+
+  const base = new Date(originalPickupAt);
+
+  const plus2 = new Date(base);
+  plus2.setHours(plus2.getHours() + 2);
+
+  const plus4 = new Date(base);
+  plus4.setHours(plus4.getHours() + 4);
+
+  const nextMorning = new Date(base);
+  nextMorning.setDate(nextMorning.getDate() + 1);
+  nextMorning.setHours(9, 0, 0, 0);
+
+  const nextEvening = new Date(base);
+  nextEvening.setDate(nextEvening.getDate() + 1);
+  nextEvening.setHours(17, 0, 0, 0);
+
+  return [
+    { label: "2 hours later", pickup_at: plus2.toISOString() },
+    { label: "4 hours later", pickup_at: plus4.toISOString() },
+    { label: "Tomorrow morning", pickup_at: nextMorning.toISOString() },
+    { label: "Tomorrow evening", pickup_at: nextEvening.toISOString() },
+  ];
+}
+
+async function fetchAlternativeTimeMatches(filters) {
+  if (!filters?.pickup_at) return [];
+
+  const candidates = buildAlternativePickupTimes(filters.pickup_at);
+  const matches = [];
+
+  for (const candidate of candidates) {
+    const data = await fetchWorkers({
+      ...filters,
+      pickup_at: candidate.pickup_at,
+    });
+
+    if (data.items?.length > 0) {
+      matches.push({
+        label: candidate.label,
+        pickup_at: candidate.pickup_at,
+        count: data.items.length,
+      });
+    }
+  }
+
+  return matches;
+}
+
+function toDateTimeLocal(isoString) {
+  const d = new Date(isoString);
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function applyAlternativeTime(isoString) {
+  setPickupAt(toDateTimeLocal(isoString));
+
+  const nextFilters = {
+    ...submittedFilters,
+    pickup_at: isoString,
+  };
+
+  setSubmittedFilters(nextFilters);
+}
 
   // Initial behavior:
   // once city is selected, show all workers in that area immediately
@@ -163,6 +231,8 @@ export default function WorkersSearchPage() {
     setFirstLoad(true);
     setSelectedWorker(null);
     setIsDetailsOpen(false);
+    setAlternativeTimeMatches([]);
+    setSameCityWorkers([]);
   };
 
   const openWorkerDetails = (worker) => {
@@ -171,39 +241,49 @@ export default function WorkersSearchPage() {
   };
 
   async function load(reset) {
-    if (!submittedFilters) return;
+  if (!submittedFilters) return;
 
-    try {
-      setLoading(true);
-      setError(null);
+  try {
+    setLoading(true);
+    setError(null);
 
-      const data = await fetchWorkers(
-        submittedFilters,
-        reset ? null : nextCursor
-      );
+    const data = await fetchWorkers(
+      submittedFilters,
+      reset ? null : nextCursor
+    );
 
-     setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
-setNextCursor(data.nextCursor ?? null);
+    setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
+    setNextCursor(data.nextCursor ?? null);
 
-// 👇 THIS IS THE IMPORTANT PART
-if (reset && data.items.length === 0 && submittedFilters?.city) {
-  const relaxedFilters = { ...submittedFilters };
-  delete relaxedFilters.pickup_at;
+    // 👇 ALL fallback logic goes HERE (inside try)
 
-  const relaxedData = await fetchWorkers(relaxedFilters);
+    if (reset && data.items.length === 0 && submittedFilters?.city) {
+      const relaxedFilters = { ...submittedFilters };
+      delete relaxedFilters.pickup_at;
 
-  setSameCityWorkers(relaxedData.items || []);
-} else if (reset) {
-  setSameCityWorkers([]);
-}
-    } catch (e) {
-      setError(e.message || "Search failed");
-      if (reset) setItems([]);
-    } finally {
-      setLoading(false);
-      setFirstLoad(false);
+      const relaxedData = await fetchWorkers(relaxedFilters);
+      setSameCityWorkers(relaxedData.items || []);
+
+      if (submittedFilters.pickup_at) {
+        const altMatches = await fetchAlternativeTimeMatches(submittedFilters);
+        setAlternativeTimeMatches(altMatches);
+      } else {
+        setAlternativeTimeMatches([]);
+      }
+    } else if (reset) {
+      setSameCityWorkers([]);
+      setAlternativeTimeMatches([]);
     }
+
+  } catch (e) {
+    setError(e.message || "Search failed");
+    if (reset) setItems([]);
+  } finally {
+    setLoading(false);
+    setFirstLoad(false);
   }
+}
+
 
   useEffect(() => {
     if (!submittedFilters) return;
@@ -366,9 +446,31 @@ if (reset && data.items.length === 0 && submittedFilters?.city) {
   </div>
 ) : (
   <div className="mt-6 space-y-6">
-    <div className="text-center text-slate-600 text-sm">
-No workers match your selected time and filters.
+   <div className="text-center text-slate-600 text-sm">
+  {submittedFilters?.pickup_at
+    ? "No workers match your selected time and filters."
+    : "No workers match your selected filters."}
+</div>
+    {alternativeTimeMatches.length > 0 && (
+  <div className="space-y-3">
+    <div className="text-lg font-semibold text-slate-900">
+      Try another time
     </div>
+
+    <div className="flex flex-wrap gap-3">
+      {alternativeTimeMatches.map((option) => (
+        <button
+          key={option.pickup_at}
+          type="button"
+          onClick={() => applyAlternativeTime(option.pickup_at)}
+          className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm text-slate-700"
+        >
+          {option.label} ({option.count})
+        </button>
+      ))}
+    </div>
+  </div>
+)}
 
     {sameCityWorkers.length > 0 && (
       <>

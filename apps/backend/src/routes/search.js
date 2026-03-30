@@ -23,7 +23,7 @@ const parseCsv = (v) => {
 const hhmmFromDate = (d) => {
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`; // must match your start_hhmm/end_hhmm format
+  return `${hh}:${mm}`;
 };
 
 /* -----------------------------
@@ -50,7 +50,11 @@ router.get("/search/cities", async (_req, res) => {
    GET /api/search/workers
    Required:
    - city
+
+   Optional:
    - pickup_at (ISO datetime)
+   If pickup_at exists -> apply availability filters
+   If pickup_at missing -> return all workers in the city
 ------------------------------ */
 router.get("/search/workers", async (req, res) => {
   try {
@@ -60,8 +64,8 @@ router.get("/search/workers", async (req, res) => {
       pickup_at,
 
       // services
-      service_code, // legacy (single)
-      service_codes, // NEW (csv list)
+      service_code,
+      service_codes,
 
       is_professional,
       pickup,
@@ -74,27 +78,32 @@ router.get("/search/workers", async (req, res) => {
       worker_id,
     } = req.query;
 
-    // required fields
     if (!city || String(city).trim() === "") {
       return res.status(400).json({ ok: false, error: "city is required" });
     }
-    if (!pickup_at || String(pickup_at).trim() === "") {
-      return res.status(400).json({ ok: false, error: "pickup_at is required" });
-    }
 
-    const pickupDate = new Date(pickup_at);
-    if (Number.isNaN(pickupDate.getTime())) {
-      return res
-        .status(400)
-        .json({ ok: false, error: "pickup_at must be a valid datetime" });
-    }
+    const hasPickupAt =
+      pickup_at !== undefined && String(pickup_at).trim() !== "";
 
-    const dayOfWeek = pickupDate.getDay(); // assumes your day_of_week uses JS 0..6
-    const hhmm = hhmmFromDate(pickupDate);
+    let pickupDate = null;
+    let dayOfWeek = null;
+    let hhmm = null;
+
+    if (hasPickupAt) {
+      pickupDate = new Date(pickup_at);
+
+      if (Number.isNaN(pickupDate.getTime())) {
+        return res
+          .status(400)
+          .json({ ok: false, error: "pickup_at must be a valid datetime" });
+      }
+
+      dayOfWeek = pickupDate.getDay();
+      hhmm = hhmmFromDate(pickupDate);
+    }
 
     const idFilter = worker_id ? BigInt(worker_id) : null;
 
-    // services wanted: multi + legacy single
     const multi = parseCsv(service_codes);
     const servicesWanted = [
       ...multi,
@@ -104,11 +113,12 @@ router.get("/search/workers", async (req, res) => {
     const take = Math.min(Number(limit) || 12, 50);
 
     const maxPriceNum =
-      maxPrice !== undefined && maxPrice !== ""
-        ? Number(maxPrice)
-        : undefined;
+      maxPrice !== undefined && maxPrice !== "" ? Number(maxPrice) : undefined;
+
     if (maxPriceNum !== undefined && Number.isNaN(maxPriceNum)) {
-      return res.status(400).json({ ok: false, error: "maxPrice must be a number" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "maxPrice must be a number" });
     }
 
     const where = {
@@ -126,10 +136,8 @@ router.get("/search/workers", async (req, res) => {
         ? { delivery_available: parseBool(delivery) }
         : {}),
 
-      // city is required => always filter it
       user: {
         city_name: { equals: String(city).trim(), mode: "insensitive" },
-
         ...(q
           ? {
               OR: [
@@ -142,30 +150,33 @@ router.get("/search/workers", async (req, res) => {
           : {}),
       },
 
-      // ✅ availability by business hours (day + time window)
-      Hours: {
-        some: {
-          day_of_week: dayOfWeek,
-          start_hhmm: { lte: hhmm },
-          end_hhmm: { gt: hhmm },
-        },
-      },
+      ...(hasPickupAt
+        ? {
+            Hours: {
+              some: {
+                day_of_week: dayOfWeek,
+                start_hhmm: { lte: hhmm },
+                end_hhmm: { gt: hhmm },
+              },
+            },
+          }
+        : {}),
 
-      // ✅ optional services filter (multi)
       ...(servicesWanted.length
         ? {
             Services: {
               some: {
                 service_code: { in: servicesWanted },
                 is_active: true,
-                ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
+                ...(maxPriceNum !== undefined
+                  ? { base_price: { lte: maxPriceNum } }
+                  : {}),
               },
             },
           }
         : {}),
     };
 
-    // Fetch candidates
     const workersRaw = await prisma.worker.findMany({
       where,
       take,
@@ -177,62 +188,75 @@ router.get("/search/workers", async (req, res) => {
         Services: {
           where: {
             is_active: true,
-            ...(servicesWanted.length ? { service_code: { in: servicesWanted } } : {}),
-            ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
+            ...(servicesWanted.length
+              ? { service_code: { in: servicesWanted } }
+              : {}),
+            ...(maxPriceNum !== undefined
+              ? { base_price: { lte: maxPriceNum } }
+              : {}),
           },
-          include: { Service: true }, // ServiceCatalog via relation field "Service"
+          include: { Service: true },
         },
         RatingsReceived: true,
       },
     });
 
-    // Filter by min_notice_minutes (worker-specific notice)
-    const now = new Date();
-    const workersAfterNotice = workersRaw.filter((w) => {
-      const diffMinutes = (pickupDate.getTime() - now.getTime()) / 60000;
-      return diffMinutes >= (w.min_notice_minutes || 0);
-    });
+    let filteredWorkers = workersRaw;
 
-    // Filter by max_orders_per_day (capacity)
-    // Count scheduled_pickup on the pickup day per worker
-    const startOfDay = new Date(pickupDate);
-    startOfDay.setHours(0, 0, 0, 0);
+    // Only apply notice + capacity checks if pickup_at exists
+    if (hasPickupAt) {
+      const now = new Date();
 
-    const endOfDay = new Date(pickupDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const workerIds = workersAfterNotice.map((w) => w.id);
-    let ordersCountByWorker = new Map();
-
-    if (workerIds.length) {
-      const orders = await prisma.order.findMany({
-        where: {
-          worker_id: { in: workerIds },
-          scheduled_pickup: { gte: startOfDay, lte: endOfDay },
-          // ignore cancelled
-          status: { notIn: ["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"] },
-        },
-        select: { worker_id: true },
+      filteredWorkers = filteredWorkers.filter((w) => {
+        const diffMinutes = (pickupDate.getTime() - now.getTime()) / 60000;
+        return diffMinutes >= (w.min_notice_minutes || 0);
       });
 
-      for (const o of orders) {
-        const key = o.worker_id.toString();
-        ordersCountByWorker.set(key, (ordersCountByWorker.get(key) || 0) + 1);
+      const startOfDay = new Date(pickupDate);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(pickupDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const workerIds = filteredWorkers.map((w) => w.id);
+      const ordersCountByWorker = new Map();
+
+      if (workerIds.length) {
+        const orders = await prisma.order.findMany({
+          where: {
+            worker_id: { in: workerIds },
+            scheduled_pickup: { gte: startOfDay, lte: endOfDay },
+            status: {
+              notIn: ["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"],
+            },
+          },
+          select: { worker_id: true },
+        });
+
+        for (const o of orders) {
+          const key = o.worker_id.toString();
+          ordersCountByWorker.set(key, (ordersCountByWorker.get(key) || 0) + 1);
+        }
       }
+
+      filteredWorkers = filteredWorkers.filter((w) => {
+        const cnt = ordersCountByWorker.get(w.id.toString()) || 0;
+        return cnt < (w.max_orders_per_day || 0);
+      });
     }
 
-    const workersAfterCapacity = workersAfterNotice.filter((w) => {
-      const cnt = ordersCountByWorker.get(w.id.toString()) || 0;
-      return cnt < (w.max_orders_per_day || 0);
-    });
+    const minR =
+      minRating !== undefined && minRating !== ""
+        ? Number(minRating)
+        : undefined;
 
-    // Shape + minRating filter
-    const minR = minRating !== undefined && minRating !== "" ? Number(minRating) : undefined;
     if (minR !== undefined && Number.isNaN(minR)) {
-      return res.status(400).json({ ok: false, error: "minRating must be a number" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "minRating must be a number" });
     }
 
-    const result = workersAfterCapacity
+    const result = filteredWorkers
       .map((w) => {
         const avg =
           w.RatingsReceived.length > 0
@@ -282,7 +306,9 @@ router.get("/search/workers", async (req, res) => {
       .filter(Boolean);
 
     const nextCursor =
-      workersRaw.length > 0 ? workersRaw[workersRaw.length - 1].id.toString() : null;
+      workersRaw.length > 0
+        ? workersRaw[workersRaw.length - 1].id.toString()
+        : null;
 
     res.json({ ok: true, data: { items: result, nextCursor } });
   } catch (err) {

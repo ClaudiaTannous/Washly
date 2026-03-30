@@ -3,24 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import SearchFilters from "@/components/ui/SearchFilters";
 import WorkerCard from "@/components/ui/WorkerCard";
+import WorkerDetailsModal from "@/components/ui/WorkerDetailsModal";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
-/**
- * Supports:
- * - city (required)
- * - pickup_at (required) ISO string
- * - service_codes (optional) comma-separated list
- * - other optional filters: is_professional, pickup, delivery, minRating, maxPrice
- */
 async function fetchWorkers(filters, cursor) {
   const params = new URLSearchParams();
 
   Object.entries(filters || {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
 
-    // multi-services support
     if (key === "service_codes" && Array.isArray(value)) {
       if (value.length) params.set("service_codes", value.join(","));
       return;
@@ -37,43 +30,36 @@ async function fetchWorkers(filters, cursor) {
 
   const json = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(
-      json?.error || `HTTP ${res.status}: ${await res.text()}`
-    );
+    throw new Error(json?.error || `HTTP ${res.status}`);
   }
   if (!json?.ok) throw new Error(json?.error || "Search failed");
 
-  return json.data; // { items, nextCursor }
+  return json.data;
 }
 
 export default function WorkersSearchPage() {
-  // REQUIRED top fields
   const [city, setCity] = useState("");
-  const [pickupAt, setPickupAt] = useState(""); // datetime-local string
+  const [pickupAt, setPickupAt] = useState("");
 
-  // City dropdown data (from DB)
   const [cities, setCities] = useState([]);
   const [citiesError, setCitiesError] = useState("");
 
-  // Sidebar advanced filters (service multi-select lives there)
   const [advancedFilters, setAdvancedFilters] = useState({});
-
-  // Services list for sidebar
   const [services, setServices] = useState([]);
   const [servicesError, setServicesError] = useState("");
 
-  // Search state
-  const [submittedFilters, setSubmittedFilters] = useState(null); // null => not submitted
+  const [submittedFilters, setSubmittedFilters] = useState(null);
   const [items, setItems] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
   const [firstLoad, setFirstLoad] = useState(true);
   const [error, setError] = useState(null);
 
-  // validation
-  const [touched, setTouched] = useState({ city: false, pickupAt: false });
+  const [touched, setTouched] = useState({ city: false });
 
-  // Load cities from DB
+  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
   useEffect(() => {
     let alive = true;
 
@@ -82,8 +68,9 @@ export default function WorkersSearchPage() {
         setCitiesError("");
         const res = await fetch(`${API_BASE}/api/search/cities`);
         const json = await res.json();
-        if (!res.ok || !json?.ok)
+        if (!res.ok || !json?.ok) {
           throw new Error(json?.error || "Failed to load cities");
+        }
 
         if (alive) setCities(Array.isArray(json.data) ? json.data : []);
       } catch (_e) {
@@ -97,7 +84,6 @@ export default function WorkersSearchPage() {
     };
   }, []);
 
-  // Load services (for sidebar filter)
   useEffect(() => {
     let alive = true;
 
@@ -108,8 +94,6 @@ export default function WorkersSearchPage() {
         if (!res.ok) throw new Error(await res.text());
 
         const json = await res.json();
-
-        // your controller returns an array directly, but handle both formats:
         const list = Array.isArray(json) ? json : json?.data || [];
 
         if (alive) setServices(list);
@@ -125,25 +109,45 @@ export default function WorkersSearchPage() {
   }, []);
 
   const isCityValid = city.trim().length > 0;
-  const isPickupValid = Boolean(pickupAt);
-  const canSearch = isCityValid && isPickupValid;
 
   const countLabel = useMemo(() => {
     if (firstLoad || !submittedFilters) return "";
     return `${items.length} providers found`;
   }, [firstLoad, items.length, submittedFilters]);
 
-  const onSearch = () => {
-    setTouched({ city: true, pickupAt: true });
-    if (!canSearch) return;
-
+  function buildFilters() {
     const finalFilters = {
       ...advancedFilters,
       city: city.trim(),
-      pickup_at: new Date(pickupAt).toISOString(), // backend expects ISO
     };
 
-    setSubmittedFilters(finalFilters);
+    if (pickupAt) {
+      finalFilters.pickup_at = new Date(pickupAt).toISOString();
+    }
+
+    return finalFilters;
+  }
+
+  // Initial behavior:
+  // once city is selected, show all workers in that area immediately
+  useEffect(() => {
+    if (!city.trim()) {
+      setSubmittedFilters(null);
+      setItems([]);
+      setNextCursor(null);
+      setError(null);
+      setFirstLoad(true);
+      return;
+    }
+
+    setSubmittedFilters({ city: city.trim() });
+  }, [city]);
+
+  const onSearch = () => {
+    setTouched({ city: true });
+    if (!isCityValid) return;
+
+    setSubmittedFilters(buildFilters());
   };
 
   const onReset = () => {
@@ -151,11 +155,18 @@ export default function WorkersSearchPage() {
     setPickupAt("");
     setAdvancedFilters({});
     setSubmittedFilters(null);
-    setTouched({ city: false, pickupAt: false });
+    setTouched({ city: false });
     setItems([]);
     setNextCursor(null);
     setError(null);
     setFirstLoad(true);
+    setSelectedWorker(null);
+    setIsDetailsOpen(false);
+  };
+
+  const openWorkerDetails = (worker) => {
+    setSelectedWorker(worker);
+    setIsDetailsOpen(true);
   };
 
   async function load(reset) {
@@ -189,21 +200,18 @@ export default function WorkersSearchPage() {
 
   return (
     <div className="min-h-screen bg-[#EBF8FB] text-[13px]" dir="ltr">
-      {/* Hero */}
       <div className="max-w-[1100px] mx-auto px-5 pt-6 pb-4">
         <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 text-center">
           Laundry Service Provider Search
         </h1>
         <p className="text-slate-600 text-center mt-2 text-sm">
-          Choose a city and pickup time to see available providers.
+          Choose a city to see all providers in that area. Pickup time is optional.
         </p>
       </div>
 
-      {/* Top REQUIRED filters */}
       <div className="max-w-[1100px] mx-auto px-5">
         <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-3 md:p-4">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-            {/* City dropdown (required) */}
             <div className="md:col-span-5">
               <label className="text-xs text-slate-500">
                 City <span className="text-red-600">*</span>
@@ -238,39 +246,26 @@ export default function WorkersSearchPage() {
               ) : null}
             </div>
 
-            {/* Pickup time (required) */}
             <div className="md:col-span-5">
               <label className="text-xs text-slate-500">
-                Pickup time <span className="text-red-600">*</span>
+                Pickup time <span className="text-slate-400">(optional)</span>
               </label>
 
               <input
                 type="datetime-local"
                 value={pickupAt}
                 onChange={(e) => setPickupAt(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, pickupAt: true }))}
-                className={`w-full mt-1 px-3 py-2 rounded-xl border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 ${
-                  !isPickupValid && touched.pickupAt
-                    ? "border-red-400 ring-0"
-                    : "border-slate-200"
-                }`}
+                className="w-full mt-1 px-3 py-2 rounded-xl border text-sm bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400"
               />
-
-              {!isPickupValid && touched.pickupAt ? (
-                <div className="text-xs text-red-600 mt-1">
-                  Pickup time is required
-                </div>
-              ) : null}
             </div>
 
-            {/* Search button */}
             <div className="md:col-span-2">
               <button
                 onClick={onSearch}
                 className="w-full px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm disabled:opacity-60"
                 disabled={loading}
               >
-                {loading ? "Searching..." : "Search"}
+                {loading ? "Searching..." : "Apply"}
               </button>
             </div>
           </div>
@@ -286,10 +281,8 @@ export default function WorkersSearchPage() {
         </div>
       </div>
 
-      {/* Layout: sidebar + results */}
       <div className="max-w-[1100px] mx-auto px-5 pb-10 mt-6">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          {/* Sidebar filters (service optional, multi-select should be here) */}
           <aside className="md:col-span-4">
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
               <div className="flex items-center justify-between">
@@ -302,11 +295,6 @@ export default function WorkersSearchPage() {
               </div>
 
               <div className="mt-3">
-                {/* IMPORTANT:
-                   This assumes your SearchFilters supports:
-                   services, servicesError, value, onChange
-                   (so it can do multi-service optional selection)
-                */}
                 <SearchFilters
                   services={services}
                   servicesError={servicesError}
@@ -318,13 +306,13 @@ export default function WorkersSearchPage() {
               <button
                 onClick={onSearch}
                 className="mt-4 w-full px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm"
+                disabled={!city.trim()}
               >
                 Apply filters
               </button>
             </div>
           </aside>
 
-          {/* Results */}
           <main className="md:col-span-8">
             <div className="flex items-end justify-between">
               <div>
@@ -332,8 +320,8 @@ export default function WorkersSearchPage() {
                   Available Providers
                 </h2>
                 <p className="text-slate-600 text-sm mt-1">
-                  {!submittedFilters
-                    ? "Select a city + pickup time, then click Search."
+                  {!city.trim()
+                    ? "Choose a city first."
                     : firstLoad
                     ? "Loading results..."
                     : items.length > 0
@@ -344,7 +332,6 @@ export default function WorkersSearchPage() {
               <div className="text-sm text-slate-500">{countLabel}</div>
             </div>
 
-            {/* show nothing before search */}
             {!submittedFilters ? null : (
               <>
                 {error && (
@@ -354,14 +341,14 @@ export default function WorkersSearchPage() {
                 )}
 
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                 {items.map((worker) => (
-  <WorkerCard
-    key={worker.worker_id}
-    worker={worker}
-    selectedCity={city}   // ✅ IMPORTANT
-  />
-))}
-
+                  {items.map((worker) => (
+                    <WorkerCard
+                      key={worker.worker_id}
+                      worker={worker}
+                      selectedCity={city}
+                      onOpenDetails={openWorkerDetails}
+                    />
+                  ))}
                 </div>
 
                 <div className="py-8 flex justify-center">
@@ -388,6 +375,12 @@ export default function WorkersSearchPage() {
           </main>
         </div>
       </div>
+
+      <WorkerDetailsModal
+        open={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        worker={selectedWorker}
+      />
     </div>
   );
 }

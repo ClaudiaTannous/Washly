@@ -1,153 +1,43 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import SearchFilters from "@/components/ui/SearchFilters";
 import WorkerCard from "@/components/ui/WorkerCard";
 import WorkerDetailsModal from "@/components/ui/WorkerDetailsModal";
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
 async function fetchWorkers(filters, cursor) {
   const params = new URLSearchParams();
-
   Object.entries(filters || {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === "") return;
-
     if (key === "service_codes" && Array.isArray(value)) {
       if (value.length) params.set("service_codes", value.join(","));
       return;
     }
-
     params.set(key, String(value));
   });
-
   if (cursor) params.set("cursor", cursor);
-  if (!params.has("limit")) params.set("limit", "12");
+  if (!params.has("limit")) params.set("limit", "50");
 
-  const url = `${API_BASE}/api/search/workers?${params.toString()}`;
-  const res = await fetch(url);
-
+  const res = await fetch(`${API_BASE}/api/search/workers?${params.toString()}`);
   const json = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(json?.error || `HTTP ${res.status}`);
-  }
-  if (!json?.ok) throw new Error(json?.error || "Search failed");
-
+  if (!res.ok || !json?.ok) throw new Error(json?.error || `HTTP ${res.status}`);
   return json.data;
 }
 
-export default function WorkersSearchPage() {
-  const [city, setCity] = useState("");
-  const [pickupAt, setPickupAt] = useState("");
+function toDateTimeLocal(isoString) {
+  const d = new Date(isoString);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
 
-  const [cities, setCities] = useState([]);
-  const [citiesError, setCitiesError] = useState("");
-
-  const [advancedFilters, setAdvancedFilters] = useState({});
-  const [services, setServices] = useState([]);
-  const [servicesError, setServicesError] = useState("");
-
-  const [submittedFilters, setSubmittedFilters] = useState(null);
-  const [items, setItems] = useState([]);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [firstLoad, setFirstLoad] = useState(true);
-  const [error, setError] = useState(null);
-
-  const [touched, setTouched] = useState({ city: false });
-
-  const [selectedWorker, setSelectedWorker] = useState(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [sameCityWorkers, setSameCityWorkers] = useState([]);
-  const [alternativeTimeMatches, setAlternativeTimeMatches] = useState([]);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function loadCities() {
-      try {
-        setCitiesError("");
-        const res = await fetch(`${API_BASE}/api/search/cities`);
-        const json = await res.json();
-        if (!res.ok || !json?.ok) {
-          throw new Error(json?.error || "Failed to load cities");
-        }
-
-        if (alive) setCities(Array.isArray(json.data) ? json.data : []);
-      } catch (_e) {
-        if (alive) setCitiesError("Could not load cities list");
-      }
-    }
-
-    loadCities();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function loadServices() {
-      try {
-        setServicesError("");
-        const res = await fetch(`${API_BASE}/api/services`);
-        if (!res.ok) throw new Error(await res.text());
-
-        const json = await res.json();
-        const list = Array.isArray(json) ? json : json?.data || [];
-
-        if (alive) setServices(list);
-      } catch (_e) {
-        if (alive) setServicesError("Could not load services list");
-      }
-    }
-
-    loadServices();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const isCityValid = city.trim().length > 0;
-
-  const countLabel = useMemo(() => {
-    if (firstLoad || !submittedFilters) return "";
-    return `${items.length} providers found`;
-  }, [firstLoad, items.length, submittedFilters]);
-
-  function buildFilters() {
-    const finalFilters = {
-      ...advancedFilters,
-      city: city.trim(),
-    };
-
-    if (pickupAt) {
-      finalFilters.pickup_at = new Date(pickupAt).toISOString();
-    }
-
-    return finalFilters;
-  }
-  function buildAlternativePickupTimes(originalPickupAt) {
+function buildAlternativePickupTimes(originalPickupAt) {
   if (!originalPickupAt) return [];
-
   const base = new Date(originalPickupAt);
-
-  const plus2 = new Date(base);
-  plus2.setHours(plus2.getHours() + 2);
-
-  const plus4 = new Date(base);
-  plus4.setHours(plus4.getHours() + 4);
-
-  const nextMorning = new Date(base);
-  nextMorning.setDate(nextMorning.getDate() + 1);
-  nextMorning.setHours(9, 0, 0, 0);
-
-  const nextEvening = new Date(base);
-  nextEvening.setDate(nextEvening.getDate() + 1);
-  nextEvening.setHours(17, 0, 0, 0);
-
+  const plus2 = new Date(base); plus2.setHours(plus2.getHours() + 2);
+  const plus4 = new Date(base); plus4.setHours(plus4.getHours() + 4);
+  const nextMorning = new Date(base); nextMorning.setDate(nextMorning.getDate() + 1); nextMorning.setHours(9, 0, 0, 0);
+  const nextEvening = new Date(base); nextEvening.setDate(nextEvening.getDate() + 1); nextEvening.setHours(17, 0, 0, 0);
   return [
     { label: "2 hours later", pickup_at: plus2.toISOString() },
     { label: "4 hours later", pickup_at: plus4.toISOString() },
@@ -156,49 +46,79 @@ export default function WorkersSearchPage() {
   ];
 }
 
-async function fetchAlternativeTimeMatches(filters) {
-  if (!filters?.pickup_at) return [];
+export default function WorkersSearchPage() {
+  const [city, setCity] = useState("");
+  const [pickupAt, setPickupAt] = useState("");
+  const [cities, setCities] = useState([]);
+  const [citiesError, setCitiesError] = useState("");
+  const [advancedFilters, setAdvancedFilters] = useState({});
+  const [services, setServices] = useState([]);
+  const [servicesError, setServicesError] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const candidates = buildAlternativePickupTimes(filters.pickup_at);
-  const matches = [];
+  const [submittedFilters, setSubmittedFilters] = useState(null);
+  const [items, setItems] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [firstLoad, setFirstLoad] = useState(true);
+  const [error, setError] = useState(null);
 
-  for (const candidate of candidates) {
-    const data = await fetchWorkers({
-      ...filters,
-      pickup_at: candidate.pickup_at,
-    });
+  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [sameCityWorkers, setSameCityWorkers] = useState([]);
+  const [alternativeTimeMatches, setAlternativeTimeMatches] = useState([]);
+  const [noWorkersInCity, setNoWorkersInCity] = useState(false);
 
-    if (data.items?.length > 0) {
-      matches.push({
-        label: candidate.label,
-        pickup_at: candidate.pickup_at,
-        count: data.items.length,
-      });
+  // Load logged-in user's city as default
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        if (!token) return;
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const user = await res.json();
+        if (user?.city_name) setCity(user.city_name);
+      } catch (_) {}
     }
+    loadCurrentUser();
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/search/cities`)
+      .then((r) => r.json())
+      .then((json) => { if (alive && json?.ok) setCities(Array.isArray(json.data) ? json.data : []); })
+      .catch(() => { if (alive) setCitiesError("Could not load cities"); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API_BASE}/api/services`)
+      .then((r) => r.json())
+      .then((json) => { if (alive) setServices(Array.isArray(json) ? json : json?.data || []); })
+      .catch(() => { if (alive) setServicesError("Could not load services"); });
+    return () => { alive = false; };
+  }, []);
+
+  // Sort items by rating descending
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0)),
+    [items]
+  );
+
+  const isCityValid = city.trim().length > 0;
+
+  function buildFilters() {
+    const f = { ...advancedFilters, city: city.trim() };
+    if (pickupAt) f.pickup_at = new Date(pickupAt).toISOString();
+    return f;
   }
 
-  return matches;
-}
-
-function toDateTimeLocal(isoString) {
-  const d = new Date(isoString);
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 16);
-}
-
-function applyAlternativeTime(isoString) {
-  setPickupAt(toDateTimeLocal(isoString));
-
-  const nextFilters = {
-    ...submittedFilters,
-    pickup_at: isoString,
-  };
-
-  setSubmittedFilters(nextFilters);
-}
-
-  // Initial behavior:
-  // once city is selected, show all workers in that area immediately
+  // Auto-load when city is set
   useEffect(() => {
     if (!city.trim()) {
       setSubmittedFilters(null);
@@ -208,314 +128,353 @@ function applyAlternativeTime(isoString) {
       setFirstLoad(true);
       return;
     }
-
+    setNoWorkersInCity(false);
     setSubmittedFilters({ city: city.trim() });
   }, [city]);
 
   const onSearch = () => {
-    setTouched({ city: true });
     if (!isCityValid) return;
-
     setSubmittedFilters(buildFilters());
+    setFiltersOpen(false);
   };
 
   const onReset = () => {
-    setCity("");
     setPickupAt("");
     setAdvancedFilters({});
-    setSubmittedFilters(null);
-    setTouched({ city: false });
-    setItems([]);
-    setNextCursor(null);
-    setError(null);
-    setFirstLoad(true);
-    setSelectedWorker(null);
-    setIsDetailsOpen(false);
-    setAlternativeTimeMatches([]);
-    setSameCityWorkers([]);
+    if (city.trim()) setSubmittedFilters({ city: city.trim() });
   };
 
-  const openWorkerDetails = (worker) => {
-    setSelectedWorker(worker);
-    setIsDetailsOpen(true);
-  };
+  async function fetchAlternativeTimeMatches(filters) {
+    if (!filters?.pickup_at) return [];
+    const candidates = buildAlternativePickupTimes(filters.pickup_at);
+    const matches = [];
+    for (const c of candidates) {
+      const data = await fetchWorkers({ ...filters, pickup_at: c.pickup_at });
+      if (data.items?.length > 0) matches.push({ label: c.label, pickup_at: c.pickup_at, count: data.items.length });
+    }
+    return matches;
+  }
 
-  async function load(reset) {
-  if (!submittedFilters) return;
+  function applyAlternativeTime(isoString) {
+    setPickupAt(toDateTimeLocal(isoString));
+    setSubmittedFilters({ ...submittedFilters, pickup_at: isoString });
+  }
 
-  try {
-    setLoading(true);
-    setError(null);
+  const load = useCallback(async (reset) => {
+    if (!submittedFilters) return;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await fetchWorkers(submittedFilters, reset ? null : nextCursor);
+      setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
+      setNextCursor(data.nextCursor ?? null);
 
-    const data = await fetchWorkers(
-      submittedFilters,
-      reset ? null : nextCursor
-    );
+      if (reset && data.items.length === 0 && submittedFilters?.city) {
+        // Check if ANY workers exist in this city (no filters, no time)
+        const cityOnlyData = await fetchWorkers({ city: submittedFilters.city });
+        const anyInCity = (cityOnlyData.items || []).length > 0;
 
-    setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
-    setNextCursor(data.nextCursor ?? null);
-
-    // 👇 ALL fallback logic goes HERE (inside try)
-
-    if (reset && data.items.length === 0 && submittedFilters?.city) {
-      const relaxedFilters = { ...submittedFilters };
-      delete relaxedFilters.pickup_at;
-
-      const relaxedData = await fetchWorkers(relaxedFilters);
-      setSameCityWorkers(relaxedData.items || []);
-
-      if (submittedFilters.pickup_at) {
-        const altMatches = await fetchAlternativeTimeMatches(submittedFilters);
-        setAlternativeTimeMatches(altMatches);
-      } else {
+        if (!anyInCity) {
+          // Case 2: no workers in this city at all
+          setNoWorkersInCity(true);
+          setSameCityWorkers([]);
+          setAlternativeTimeMatches([]);
+        } else {
+          setNoWorkersInCity(false);
+          const relaxed = { ...submittedFilters };
+          delete relaxed.pickup_at;
+          const relaxedData = await fetchWorkers(relaxed);
+          setSameCityWorkers(relaxedData.items || []);
+          if (submittedFilters.pickup_at) {
+            setAlternativeTimeMatches(await fetchAlternativeTimeMatches(submittedFilters));
+          } else {
+            setAlternativeTimeMatches([]);
+          }
+        }
+      } else if (reset) {
+        setNoWorkersInCity(false);
+        setSameCityWorkers([]);
         setAlternativeTimeMatches([]);
       }
-    } else if (reset) {
-      setSameCityWorkers([]);
-      setAlternativeTimeMatches([]);
+    } catch (e) {
+      setError(e.message || "Search failed");
+      if (reset) setItems([]);
+    } finally {
+      setLoading(false);
+      setFirstLoad(false);
     }
-
-  } catch (e) {
-    setError(e.message || "Search failed");
-    if (reset) setItems([]);
-  } finally {
-    setLoading(false);
-    setFirstLoad(false);
-  }
-}
-
+  }, [submittedFilters, nextCursor]);
 
   useEffect(() => {
     if (!submittedFilters) return;
     load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(submittedFilters)]);
 
   return (
     <div className="min-h-screen bg-[#EBF8FB] text-[13px]" dir="ltr">
-      <div className="max-w-[1100px] mx-auto px-5 pt-6 pb-4">
-        <h1 className="text-3xl md:text-4xl font-semibold text-slate-900 text-center">
-          Laundry Service Provider Search
-        </h1>
-        <p className="text-slate-600 text-center mt-2 text-sm">
-          Choose a city to see all providers in that area. Pickup time is optional.
-        </p>
-      </div>
+      <div className="max-w-[900px] mx-auto px-4 pt-6 pb-10">
 
-      <div className="max-w-[1100px] mx-auto px-5">
-        <div className="bg-white/80 backdrop-blur rounded-2xl shadow-sm border border-slate-100 p-3 md:p-4">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-            <div className="md:col-span-5">
-              <label className="text-xs text-slate-500">
-                City <span className="text-red-600">*</span>
-              </label>
+        {/* ── Top search bar ── */}
+        <div className="bg-white border border-sky-100 rounded-2xl px-4 py-3 mb-4 flex items-center gap-3 flex-wrap">
 
-              <select
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                onBlur={() => setTouched((t) => ({ ...t, city: true }))}
-                className={`w-full mt-1 px-3 py-2 rounded-xl border text-sm bg-white focus:outline-none focus:ring-2 focus:ring-sky-400 ${
-                  !isCityValid && touched.city
-                    ? "border-red-400 ring-0"
-                    : "border-slate-200"
-                }`}
-              >
-                <option value="">Choose a city</option>
-                {cities.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-
-              {citiesError ? (
-                <div className="text-xs text-red-600 mt-1">{citiesError}</div>
-              ) : null}
-
-              {!isCityValid && touched.city ? (
-                <div className="text-xs text-red-600 mt-1">
-                  City is required
-                </div>
-              ) : null}
-            </div>
-
-            <div className="md:col-span-5">
-              <label className="text-xs text-slate-500">
-                Pickup time <span className="text-slate-400">(optional)</span>
-              </label>
-
-              <input
-                type="datetime-local"
-                value={pickupAt}
-                onChange={(e) => setPickupAt(e.target.value)}
-                className="w-full mt-1 px-3 py-2 rounded-xl border text-sm bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-sky-400"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <button
-                onClick={onSearch}
-                className="w-full px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm disabled:opacity-60"
-                disabled={loading}
-              >
-                {loading ? "Searching..." : "Apply"}
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-end">
-            <button
-              onClick={onReset}
-              className="text-sm px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700"
+          {/* City chip */}
+          <div className="flex items-center gap-1.5 bg-sky-50 border border-sky-200 rounded-full px-3 py-1.5 text-[13px] text-sky-800 flex-shrink-0 min-w-[180px]">
+            <svg className="w-3.5 h-3.5 text-sky-500" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+            </svg>
+<span className="font-bold text-[15px]">{city || "No city"}</span>
+            <select
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+className="ml-1 text-[13px] font-semibold text-sky-600 underline bg-transparent border-none outline-none cursor-pointer appearance-none"              title="Change city"
             >
-              Reset
-            </button>
+              <option value="">change</option>
+              {cities.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
           </div>
+
+          {/* Pickup time */}
+          <div className="flex items-center gap-2 flex-1 min-w-[200px] border border-sky-100 rounded-full px-3 py-1.5 bg-white">
+            <svg className="w-3.5 h-3.5 text-sky-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <input
+              type="datetime-local"
+              value={pickupAt}
+              onChange={(e) => setPickupAt(e.target.value)}
+className="flex-1 text-[13px] font-semibold text-slate-600 border-none outline-none bg-transparent"            />
+          </div>
+
+          {/* Filters toggle */}
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[13px] transition ${
+              filtersOpen
+                ? "bg-sky-600 text-white border-sky-600"
+                : "bg-white text-sky-700 border-sky-200 hover:bg-sky-50"
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <line x1="4" y1="6" x2="20" y2="6" /><line x1="8" y1="12" x2="16" y2="12" /><line x1="11" y1="18" x2="13" y2="18" />
+            </svg>
+            Filters
+          </button>
+
+          <button
+            type="button"
+            onClick={onSearch}
+            disabled={!isCityValid || loading}
+            className="px-5 py-1.5 rounded-full bg-sky-600 hover:bg-sky-700 text-white text-[13px] font-medium disabled:opacity-50 transition"
+          >
+            {loading ? "Searching..." : "Search"}
+          </button>
+
+          <button
+            type="button"
+            onClick={onReset}
+            className="text-[12px] text-slate-400 hover:text-slate-600 px-2 py-1"
+          >
+            Reset
+          </button>
         </div>
-      </div>
 
-      <div className="max-w-[1100px] mx-auto px-5 pb-10 mt-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          <aside className="md:col-span-4">
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-900">
-                  Filters
-                </div>
-                <div className="text-xs text-slate-500">
-                  {submittedFilters ? `${items.length} found` : ""}
-                </div>
-              </div>
+        {citiesError && <p className="text-xs text-red-500 mb-2">{citiesError}</p>}
 
-              <div className="mt-3">
-                <SearchFilters
-                  services={services}
-                  servicesError={servicesError}
-                  value={advancedFilters}
-                  onChange={setAdvancedFilters}
-                />
-              </div>
-
+        {/* ── Filter panel ── */}
+        {filtersOpen && (
+          <div className="bg-white border border-sky-100 rounded-2xl px-5 py-4 mb-4">
+            <SearchFilters
+              services={services}
+              servicesError={servicesError}
+              value={advancedFilters}
+              onChange={setAdvancedFilters}
+            />
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-sky-50">
               <button
+                type="button"
+                onClick={onReset}
+                className="px-4 py-1.5 rounded-full border border-slate-200 text-[13px] text-slate-500 hover:bg-slate-50"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
                 onClick={onSearch}
-                className="mt-4 w-full px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-semibold text-sm"
-                disabled={!city.trim()}
+                disabled={!isCityValid}
+                className="px-5 py-1.5 rounded-full bg-sky-600 text-white text-[13px] font-medium hover:bg-sky-700 disabled:opacity-50"
               >
                 Apply filters
               </button>
             </div>
-          </aside>
+          </div>
+        )}
 
-          <main className="md:col-span-8">
-            <div className="flex items-end justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  Available Providers
-                </h2>
-                <p className="text-slate-600 text-sm mt-1">
-                  {!city.trim()
-                    ? "Choose a city first."
-                    : firstLoad
-                    ? "Loading results..."
-                    : items.length > 0
-                    ? `${items.length} providers found`
-                    : "No results found"}
-                </p>
-              </div>
-              <div className="text-sm text-slate-500">{countLabel}</div>
+        {/* ── Results header ── */}
+        {submittedFilters && (
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-[16px] font-medium text-slate-900">
+                Providers in {city}
+              </h2>
+              <p className="text-[12px] text-slate-400 mt-0.5">
+                {firstLoad
+                  ? "Loading..."
+                  : sortedItems.length > 0
+                  ? `${sortedItems.length} found · sorted by rating`
+                  : "No results found"}
+              </p>
             </div>
+          </div>
+        )}
 
-            {!submittedFilters ? null : (
-              <>
-                {error && (
-                  <div className="mt-3 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
-                    {error}
-                  </div>
-                )}
+        {/* ── Error ── */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-[13px] mb-4">
+            {error}
+          </div>
+        )}
 
-               {items.length > 0 ? (
-  <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-    {items.map((worker) => (
-      <WorkerCard
-        key={worker.worker_id}
-        worker={worker}
-        selectedCity={city}
-        onOpenDetails={openWorkerDetails}
-      />
-    ))}
-  </div>
-) : (
-  <div className="mt-6 space-y-6">
-   <div className="text-center text-slate-600 text-sm">
-  {submittedFilters?.pickup_at
-    ? "No workers match your selected time and filters."
-    : "No workers match your selected filters."}
-</div>
-    {alternativeTimeMatches.length > 0 && (
-  <div className="space-y-3">
-    <div className="text-lg font-semibold text-slate-900">
-      Try another time
-    </div>
+        {/* ── Worker list ── */}
+        {!submittedFilters ? (
+          <div className="text-center text-slate-400 text-[13px] py-16">
+            Choose a city to see available providers.
+          </div>
+        ) : sortedItems.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {sortedItems.map((worker, i) => (
+              <WorkerCard
+                key={worker.worker_id}
+                worker={worker}
+                rank={i + 1}
+                selectedCity={city}
+                onOpenDetails={(w) => { setSelectedWorker(w); setIsDetailsOpen(true); }}
+              />
+            ))}
+          </div>
+        ) : !firstLoad && (
+          <div className="space-y-6 mt-2">
 
-    <div className="flex flex-wrap gap-3">
-      {alternativeTimeMatches.map((option) => (
-        <button
-          key={option.pickup_at}
-          type="button"
-          onClick={() => applyAlternativeTime(option.pickup_at)}
-          className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-sm text-slate-700"
-        >
-          {option.label} ({option.count})
-        </button>
-      ))}
-    </div>
-  </div>
-)}
-
-    {sameCityWorkers.length > 0 && (
-      <>
-        <div className="text-lg font-semibold text-slate-900">
-Workers in your area (not available at your selected time)
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {sameCityWorkers.slice(0, 4).map((worker) => (
-            <WorkerCard
-              key={worker.worker_id}
-              worker={worker}
-              selectedCity={city}
-              onOpenDetails={openWorkerDetails}
-            />
-          ))}
-        </div>
-      </>
-    )}
-  </div>
-)}
-
-                <div className="py-8 flex justify-center">
-                  {nextCursor ? (
-                    <button
-                      type="button"
-                      onClick={() => load(false)}
-                      disabled={loading}
-                      className="px-6 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-60 text-sm"
-                    >
-                      {loading ? "Loading..." : "Load more"}
-                    </button>
-                  ) : (
-                    !loading &&
-                    !firstLoad && (
-                      <div className="text-slate-500 text-sm">
-                        No more results
-                      </div>
-                    )
-                  )}
+            {/* Case 2: no workers in this city at all */}
+            {noWorkersInCity && (
+              <div className="bg-white border border-sky-100 rounded-2xl px-6 py-8 text-center">
+                <div className="text-3xl mb-3">📍</div>
+                <div className="text-[15px] font-medium text-slate-800 mb-1">
+                  No providers in {city} yet
                 </div>
-              </>
+                <p className="text-[13px] text-slate-500 mb-5">
+                  We're still growing in this area. Check back soon, or try searching in a nearby city.
+                </p>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <span className="text-[12px] text-slate-400">Try another city:</span>
+                  {cities.filter((c) => c !== city).slice(0, 5).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setCity(c)}
+                      className="px-3 py-1 rounded-full border border-sky-200 bg-sky-50 text-sky-700 text-[12px] hover:bg-sky-100 transition"
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
-          </main>
-        </div>
+
+            {/* Case 3: workers exist but filters are too strict */}
+            {!noWorkersInCity && sameCityWorkers.length === 0 && alternativeTimeMatches.length === 0 && (
+              <div className="bg-white border border-sky-100 rounded-2xl px-6 py-8 text-center">
+                <div className="text-3xl mb-3">🔍</div>
+                <div className="text-[15px] font-medium text-slate-800 mb-1">
+                  No providers match your filters
+                </div>
+                <p className="text-[13px] text-slate-500 mb-5">
+                  Try relaxing your criteria — remove some filters or adjust the price and rating limits.
+                </p>
+                <button
+                  type="button"
+                  onClick={onReset}
+                  className="px-5 py-2 rounded-full bg-sky-600 text-white text-[13px] font-medium hover:bg-sky-700 transition"
+                >
+                  Clear filters
+                </button>
+              </div>
+            )}
+
+            {/* Case 1: timing doesn't match — alternative times */}
+            {alternativeTimeMatches.length > 0 && (
+              <div className="bg-white border border-sky-100 rounded-2xl px-5 py-4">
+                <div className="text-[14px] font-medium text-slate-800 mb-1">
+                  No providers available at this time
+                </div>
+                <p className="text-[12px] text-slate-400 mb-3">
+                  These nearby times have available providers:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {alternativeTimeMatches.map((option) => (
+                    <button
+                      key={option.pickup_at}
+                      type="button"
+                      onClick={() => applyAlternativeTime(option.pickup_at)}
+                      className="px-4 py-1.5 rounded-full bg-sky-50 border border-sky-200 hover:bg-sky-100 text-[13px] text-sky-700 transition"
+                    >
+                      {option.label} · {option.count} available
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Case 1 continued: workers in city but not at selected time */}
+            {sameCityWorkers.length > 0 && (
+              <div>
+                <div className="text-[14px] font-medium text-slate-800 mb-1">
+                  Providers in {city}
+                </div>
+                <p className="text-[12px] text-slate-400 mb-3">
+                  These providers are in your area but not available at your selected time.
+                </p>
+                <div className="flex flex-col gap-3">
+                  {[...sameCityWorkers]
+                    .sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0))
+                    .slice(0, 4)
+                    .map((worker, i) => (
+                      <WorkerCard
+                        key={worker.worker_id}
+                        worker={worker}
+                        rank={i + 1}
+                        selectedCity={city}
+                        onOpenDetails={(w) => { setSelectedWorker(w); setIsDetailsOpen(true); }}
+                      />
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Load more ── */}
+        {submittedFilters && !firstLoad && (
+          <div className="flex justify-center mt-6">
+            {nextCursor ? (
+              <button
+                type="button"
+                onClick={() => load(false)}
+                disabled={loading}
+                className="px-6 py-2 rounded-full border border-sky-200 bg-white text-sky-700 text-[13px] hover:bg-sky-50 disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Load more"}
+              </button>
+            ) : (
+              sortedItems.length > 0 && (
+                <p className="text-[12px] text-slate-400">All providers loaded</p>
+              )
+            )}
+          </div>
+        )}
       </div>
 
       <WorkerDetailsModal

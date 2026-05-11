@@ -18,6 +18,7 @@ import {
   Search,
   TrendingUp,
   Droplets,
+  Bell,
 } from "lucide-react";
 
 import {
@@ -25,6 +26,8 @@ import {
   getCustomerOrders,
   checkIfUserIsWorker,
 } from "../lib/apiClient";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 //
 // ---- STATUS CONFIG ----
@@ -73,7 +76,7 @@ export function CustomerDashboard({
   onNavigateToWorkerDashboard,
 }) {
   const router = useRouter();
-  // ---------------- ORIGINAL WORKING LOGIC RESTORED ----------------
+
   const [activeTab, setActiveTab] = useState("active");
 
   const [customer, setCustomer] = useState(null);
@@ -81,41 +84,158 @@ export function CustomerDashboard({
   const [isWorker, setIsWorker] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [reviewOrderId, setReviewOrderId] = useState(null);
+  const [reviewScore, setReviewScore] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSuccessPopup, setReviewSuccessPopup] = useState(false);
+
+  // NEW: notifications
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+
   const userId =
     typeof window !== "undefined" ? localStorage.getItem("userId") : null;
 
-  useEffect(() => {
+  async function loadNotifications(currentUserId) {
+    try {
+      setLoadingNotifications(true);
+
+      const res = await fetch(
+        `${API_URL}/api/notifications/user/${currentUserId}`,
+        {
+          credentials: "include",
+        },
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load notifications");
+      }
+
+      setNotifications(data || []);
+    } catch (error) {
+      console.error("Load notifications error:", error);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }
+
+  async function loadDashboard() {
     if (!userId) return;
 
-    async function load() {
-      try {
-        setLoading(true);
+    try {
+      setLoading(true);
 
-        const [cust, ords, workerStatus] = await Promise.all([
-          getCustomer(userId),
-          getCustomerOrders(userId),
-          checkIfUserIsWorker(userId),
-        ]);
+      const [cust, ords, workerStatus] = await Promise.all([
+        getCustomer(userId),
+        getCustomerOrders(userId),
+        checkIfUserIsWorker(userId),
+      ]);
 
-        setCustomer(cust);
-        setOrders(ords || []);
-        setIsWorker(workerStatus?.isWorker || false);
-      } finally {
-        setLoading(false);
-      }
+      setCustomer(cust);
+      setOrders(ords || []);
+      setIsWorker(workerStatus?.isWorker || false);
+
+      await loadNotifications(userId);
+    } finally {
+      setLoading(false);
     }
+  }
 
-    load();
+  useEffect(() => {
+    loadDashboard();
   }, [userId]);
 
-  // ---------------- GROUP ORDERS LOGIC (UNCHANGED) ----------------
+  const unreadNotificationsCount = notifications.filter(
+    (notification) => !notification.is_read,
+  ).length;
+
+  const markNotificationAsRead = async (notificationId) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/notifications/${notificationId}/read`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to mark notification as read");
+      }
+
+      setNotifications((prev) =>
+        prev.map((notification) =>
+          notification.id === notificationId
+            ? {
+                ...notification,
+                is_read: true,
+                read_at: new Date().toISOString(),
+              }
+            : notification,
+        ),
+      );
+    } catch (error) {
+      console.error("Mark notification read error:", error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    if (!userId) return;
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/notifications/user/${userId}/read-all`,
+        {
+          method: "PATCH",
+          credentials: "include",
+        },
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || "Failed to mark all notifications as read",
+        );
+      }
+
+      setNotifications((prev) =>
+        prev.map((notification) => ({
+          ...notification,
+          is_read: true,
+          read_at: new Date().toISOString(),
+        })),
+      );
+    } catch (error) {
+      console.error("Mark all notifications read error:", error);
+    }
+  };
+
+  // ---------------- GROUP ORDERS LOGIC ----------------
   const activeOrders = orders.filter((o) =>
-    ["REQUESTED", "CONFIRMED", "IN_PROGRESS"].includes(o.status)
+    ["REQUESTED", "CONFIRMED", "IN_PROGRESS"].includes(o.status),
   );
+
   const completedOrders = orders.filter((o) => o.status === "COMPLETED");
+
   const cancelledOrders = orders.filter((o) =>
-    ["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"].includes(o.status)
+    ["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"].includes(o.status),
   );
+
+  const pendingTooLongOrders = orders.filter((order) => {
+    if (order.status !== "REQUESTED") return false;
+
+    const createdAt = new Date(order.created_at).getTime();
+    const oneHour = 60 * 60 * 1000;
+
+    return Date.now() - createdAt >= oneHour;
+  });
 
   const totalSpent = orders.reduce((sum, o) => sum + (o.amount ?? 0), 0);
 
@@ -129,9 +249,96 @@ export function CustomerDashboard({
         })
       : "N/A";
 
-  // ---------------- ORDER CARD (DESIGN UPGRADED) ----------------
-  const OrderCard = ({ order }) => {
-    const config = statusConfig[order.status];
+  const submitReview = async (orderId) => {
+    try {
+      setSubmittingReview(true);
+
+      const res = await fetch(`${API_URL}/api/ratings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          orderId,
+          score: Number(reviewScore),
+          comment: reviewComment,
+        }),
+      });
+
+      let data = {};
+
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || data.message || "Failed to submit review",
+        );
+      }
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                Rating: data.rating || data,
+              }
+            : order,
+        ),
+      );
+
+      setReviewOrderId(null);
+      setReviewScore(5);
+      setReviewComment("");
+
+      setReviewSuccessPopup(true);
+
+      setTimeout(() => {
+        setReviewSuccessPopup(false);
+      }, 2500);
+    } catch (error) {
+      console.error("Submit review error:", error);
+      alert(error.message || "Something went wrong while submitting review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const getOrderMessage = (order) => {
+    if (order.status === "REQUESTED") {
+      return "Waiting for the worker to accept your order.";
+    }
+
+    if (order.status === "CONFIRMED") {
+      return "The worker accepted your order.";
+    }
+
+    if (order.status === "IN_PROGRESS") {
+      return "The worker is currently handling your laundry.";
+    }
+
+    if (order.status === "COMPLETED") {
+      return "Your order is completed. You can rate the worker.";
+    }
+
+    if (order.status === "CANCELLED_BY_WORKER") {
+      return "This order was cancelled by the worker.";
+    }
+
+    if (order.status === "CANCELLED_BY_CUSTOMER") {
+      return "You cancelled this order.";
+    }
+
+    return "";
+  };
+
+  // ---------------- ORDER CARD ----------------
+  const renderOrderCard = (order) => {
+    const config = statusConfig[order.status] || statusConfig.REQUESTED;
     const StatusIcon = config.icon;
 
     const worker = order.Worker;
@@ -146,6 +353,7 @@ export function CustomerDashboard({
               <img
                 src={worker?.image_url || "/default-avatar.png"}
                 className="w-12 h-12 rounded-xl object-cover shadow"
+                alt="Worker"
               />
 
               <div>
@@ -166,6 +374,10 @@ export function CustomerDashboard({
               <StatusIcon className="w-3 h-3 mr-1" />
               {config.label}
             </Badge>
+          </div>
+
+          <div className="mb-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
+            {getOrderMessage(order)}
           </div>
 
           {/* Stats */}
@@ -195,13 +407,86 @@ export function CustomerDashboard({
               View Details
             </Button>
 
-            {order.status === "COMPLETED" && (
-              <Button className="flex-1 bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl hover:opacity-90">
+            {order.status === "COMPLETED" && !order.Rating && (
+              <Button
+                onClick={() => {
+                  setReviewOrderId(order.id);
+                  setReviewScore(5);
+                  setReviewComment("");
+                }}
+                className="flex-1 bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl hover:opacity-90"
+              >
                 <Star className="w-4 h-4 mr-1" />
                 Rate
               </Button>
             )}
+
+            {order.status === "COMPLETED" && order.Rating && (
+              <Button
+                disabled
+                className="flex-1 bg-slate-300 text-white rounded-xl cursor-not-allowed"
+              >
+                <Star className="w-4 h-4 mr-1" />
+                Rated
+              </Button>
+            )}
           </div>
+
+          {reviewOrderId === order.id && (
+            <div className="mt-4 rounded-xl border border-cyan-100 bg-cyan-50/60 p-4">
+              <h4 className="mb-3 font-medium text-slate-800">
+                Rate this worker
+              </h4>
+
+              <label className="mb-1 block text-sm text-slate-600">Score</label>
+
+              <select
+                value={reviewScore}
+                onChange={(e) => setReviewScore(e.target.value)}
+                className="mb-3 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-800"
+              >
+                <option value="5">5 stars</option>
+                <option value="4">4 stars</option>
+                <option value="3">3 stars</option>
+                <option value="2">2 stars</option>
+                <option value="1">1 star</option>
+              </select>
+
+              <label className="mb-1 block text-sm text-slate-600">
+                Comment
+              </label>
+
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                placeholder="Write your experience..."
+                className="mb-3 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-800"
+              />
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => submitReview(order.id)}
+                  disabled={submittingReview}
+                  className="flex-1 bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white rounded-xl hover:opacity-90 disabled:opacity-60"
+                >
+                  {submittingReview ? "Submitting..." : "Submit Review"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setReviewOrderId(null);
+                    setReviewScore(5);
+                    setReviewComment("");
+                  }}
+                  className="flex-1 rounded-xl border-slate-300 hover:bg-white/70"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     );
@@ -219,6 +504,31 @@ export function CustomerDashboard({
   // ---------------- MAIN UI ----------------
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#e0f7fa] via-white to-white">
+      {reviewSuccessPopup && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="w-[90%] max-w-sm rounded-3xl border border-cyan-100 bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <CheckCircle className="h-9 w-9 text-emerald-600" />
+            </div>
+
+            <h3 className="text-lg font-semibold text-slate-800">
+              Review submitted
+            </h3>
+
+            <p className="mt-2 text-sm text-slate-500">
+              Thank you for rating this worker.
+            </p>
+
+            <Button
+              onClick={() => setReviewSuccessPopup(false)}
+              className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white hover:opacity-90"
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-7xl mx-auto px-4 py-8">
         {/* HEADER */}
         <div className="flex items-center justify-between mb-8">
@@ -235,13 +545,92 @@ export function CustomerDashboard({
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 relative">
+            {/* NEW: Notifications button */}
+            <div className="relative">
+              <Button
+                variant="outline"
+                className="rounded-xl border-slate-300 bg-white/70"
+                onClick={() => setShowNotifications((prev) => !prev)}
+              >
+                <Bell className="w-5 h-5" />
+                {unreadNotificationsCount > 0 && (
+                  <span className="absolute -top-2 -right-2 min-w-5 h-5 rounded-full bg-red-500 px-1 text-xs text-white flex items-center justify-center">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </Button>
+
+              {showNotifications && (
+                <div className="absolute right-0 top-12 z-50 w-80 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-semibold text-slate-800">
+                      Notifications
+                    </h3>
+
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        className="text-xs text-cyan-600 hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
+                  </div>
+
+                  {loadingNotifications ? (
+                    <p className="text-sm text-slate-500">
+                      Loading notifications...
+                    </p>
+                  ) : notifications.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No notifications yet.
+                    </p>
+                  ) : (
+                    <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
+                      {notifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          onClick={() =>
+                            markNotificationAsRead(notification.id)
+                          }
+                          className={`w-full rounded-xl border p-3 text-left transition ${
+                            notification.is_read
+                              ? "border-slate-100 bg-slate-50"
+                              : "border-cyan-100 bg-cyan-50"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <p className="text-sm font-semibold text-slate-800">
+                              {notification.title}
+                            </p>
+
+                            {!notification.is_read && (
+                              <span className="mt-1 h-2 w-2 rounded-full bg-cyan-500" />
+                            )}
+                          </div>
+
+                          <p className="mt-1 text-sm text-slate-600">
+                            {notification.message}
+                          </p>
+
+                          <p className="mt-2 text-xs text-slate-400">
+                            {formatDate(notification.created_at)}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <Button
               onClick={() => {
                 if (isWorker) {
-                  window.location.href = "/worker"; // User is already a worker
+                  window.location.href = "/worker";
                 } else {
-                  window.location.href = "/worker/signup"; // Not a worker → go sign up
+                  window.location.href = "/worker/signup";
                 }
               }}
               variant="outline"
@@ -272,6 +661,18 @@ export function CustomerDashboard({
           </div>
         </div>
 
+        {/* ONE HOUR WARNING */}
+        {pendingTooLongOrders.length > 0 && (
+          <Card className="mb-6 rounded-2xl border-orange-200 bg-orange-50 p-4 text-orange-800">
+            <h3 className="font-semibold">Order not accepted yet</h3>
+            <p className="mt-1 text-sm">
+              You have {pendingTooLongOrders.length} order
+              {pendingTooLongOrders.length === 1 ? "" : "s"} that have not been
+              accepted by the worker for more than one hour.
+            </p>
+          </Card>
+        )}
+
         {/* STATS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <StatsCard
@@ -301,7 +702,7 @@ export function CustomerDashboard({
 
         {/* CTA SECTION */}
         <Card className="bg-gradient-to-r from-[#4dd0e1] to-[#26c6da] text-white p-6 mb-8 rounded-2xl relative overflow-hidden shadow-lg">
-          <div className="absolute inset-0 opacity-40 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMiIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+')]"></div>
+          <div className="absolute inset-0 opacity-40 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZyI+PGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMiIgZmlsbD0id2hpdGUiIGZpbGwtb3BhY2l0eT0iMC4xIi8+PC9zdmc+')]"></div>
 
           <div className="relative z-10 flex items-center justify-between">
             <div>
@@ -339,7 +740,7 @@ export function CustomerDashboard({
             {activeOrders.length ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeOrders.map((o) => (
-                  <OrderCard key={o.id} order={o} />
+                  <div key={o.id}>{renderOrderCard(o)}</div>
                 ))}
               </div>
             ) : (
@@ -355,7 +756,7 @@ export function CustomerDashboard({
             {completedOrders.length ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {completedOrders.map((o) => (
-                  <OrderCard key={o.id} order={o} />
+                  <div key={o.id}>{renderOrderCard(o)}</div>
                 ))}
               </div>
             ) : (
@@ -371,7 +772,7 @@ export function CustomerDashboard({
             {cancelledOrders.length ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {cancelledOrders.map((o) => (
-                  <OrderCard key={o.id} order={o} />
+                  <div key={o.id}>{renderOrderCard(o)}</div>
                 ))}
               </div>
             ) : (

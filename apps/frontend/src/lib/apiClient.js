@@ -70,7 +70,7 @@ export async function createWorker(payload) {
 }
 
 export function getWorkerOrders(workerId) {
-  return apiFetch(`/api/workers/${workerId}/orders`);
+  return apiFetch(`/api/orders/worker/${workerId}`);
 }
 
 export function getWorkerOrderHistory(workerId) {
@@ -129,6 +129,51 @@ export function getCustomerOrders(userId) {
 export function checkIfUserIsWorker(userId) {
   return apiFetch(`/api/user/${userId}/is-worker`);
 }
+
+export async function updateUser(userId, data) {
+  const res = await fetch(`${API_BASE_URL}/api/user/${userId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include", // IMPORTANT (JWT cookie)
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.error || "Failed to update user");
+  }
+
+  return res.json();
+}
+
+/* -----------------------------------------------------
+   NOTIFICATIONS
+----------------------------------------------------- */
+
+export function getUserNotifications(userId) {
+  return apiFetch(`/api/notifications/user/${userId}`, {
+    method: "GET",
+  });
+}
+
+export function markNotificationAsRead(notificationId) {
+  return apiFetch(`/api/notifications/${notificationId}/read`, {
+    method: "PATCH",
+  });
+}
+
+export function markAllNotificationsAsRead(userId) {
+  return apiFetch(`/api/notifications/user/${userId}/read-all`, {
+    method: "PATCH",
+  });
+}
+
+/* -----------------------------------------------------
+   WORKER BUSINESS HOURS
+----------------------------------------------------- */
+
 export function addWorkerBusinessHoursBulk(workerId, hours) {
   return apiFetch(`/api/workers/${workerId}/hours/bulk`, {
     method: "POST",
@@ -136,13 +181,46 @@ export function addWorkerBusinessHoursBulk(workerId, hours) {
   });
 }
 
-export function createRating({ orderId, raterId, workerId, score, comment }) {
+export function getWorkerBusinessHours(workerId) {
+  return apiFetch(`/api/workers/${workerId}/hours`);
+}
+
+export function updateWorkerBusinessHours(
+  workerId,
+  { day_of_week, start_hhmm },
+  { new_start_hhmm, new_end_hhmm },
+) {
+  const query = new URLSearchParams({
+    day_of_week,
+    start_hhmm,
+  }).toString();
+
+  return apiFetch(`/api/workers/${workerId}/hours?${query}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      new_start_hhmm,
+      new_end_hhmm,
+    }),
+  });
+}
+
+export function addWorkerBusinessHours(workerId, hour) {
+  // hour = { day_of_week, start_hhmm, end_hhmm }
+  return apiFetch(`/api/workers/${workerId}/hours`, {
+    method: "POST",
+    body: JSON.stringify(hour),
+  });
+}
+
+/* -----------------------------------------------------
+   RATINGS
+----------------------------------------------------- */
+
+export function createRating({ orderId, score, comment }) {
   return apiFetch("/api/ratings", {
     method: "POST",
     body: JSON.stringify({
       orderId,
-      raterId,
-      workerId,
       score,
       comment,
     }),
@@ -178,6 +256,10 @@ export function deleteRating(ratingId) {
   });
 }
 
+/* -----------------------------------------------------
+   AI ASSISTANT
+----------------------------------------------------- */
+
 // Get or create conversation
 export function getAIConversation(workerId) {
   return apiFetch(`/api/ai/worker/${workerId}`);
@@ -190,6 +272,7 @@ export function sendAIMessage(conversationId, text) {
     body: JSON.stringify({ content: text }),
   });
 }
+
 /* -----------------------------------------------------
    WORKER SERVICES
 ----------------------------------------------------- */
@@ -198,51 +281,6 @@ export function getWorkerServices(workerId) {
   return apiFetch(`/api/workers/${workerId}/services`);
 }
 
-/* -----------------------------------------------------
-   WORKER BUSINESS HOURS
------------------------------------------------------ */
-
-export function getWorkerBusinessHours(workerId) {
-  return apiFetch(`/api/workers/${workerId}/hours`);
-}
-export function updateWorkerBusinessHours(
-  workerId,
-  { day_of_week, start_hhmm },
-  { new_start_hhmm, new_end_hhmm },
-) {
-  const query = new URLSearchParams({
-    day_of_week,
-    start_hhmm,
-  }).toString();
-
-  return apiFetch(`/api/workers/${workerId}/hours?${query}`, {
-    method: "PATCH",
-    body: JSON.stringify({
-      new_start_hhmm,
-      new_end_hhmm,
-    }),
-  });
-}
-export async function updateWorker(workerId, data) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/workers/${workerId}`,
-    {
-      method: "PUT", // 🔴 IMPORTANT (not PATCH)
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify(data),
-    },
-  );
-
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || "Failed to update worker");
-  }
-
-  return res.json();
-}
 /* -----------------------------------------------------
    WORKER SERVICES (CRUD)
 ----------------------------------------------------- */
@@ -269,34 +307,56 @@ export function deleteWorkerService(workerId, serviceCode) {
     method: "DELETE",
   });
 }
-export function addWorkerBusinessHours(workerId, hour) {
-  // hour = { day_of_week, start_hhmm, end_hhmm }
-  return apiFetch(`/api/workers/${workerId}/hours`, {
-    method: "POST",
-    body: JSON.stringify(hour),
-  });
-}
-export async function updateUser(userId, data) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/user/${userId}`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include", // IMPORTANT (JWT cookie)
-      body: JSON.stringify(data),
+
+/* -----------------------------------------------------
+   WORKER UPDATE
+----------------------------------------------------- */
+
+export async function updateWorker(workerId, data) {
+  const res = await fetch(`${API_BASE_URL}/api/workers/${workerId}`, {
+    method: "PUT", // IMPORTANT (not PATCH)
+    headers: {
+      "Content-Type": "application/json",
     },
-  );
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
 
   if (!res.ok) {
     const err = await res.json();
-    throw new Error(err.error || "Failed to update user");
+    throw new Error(err.error || "Failed to update worker");
   }
 
   return res.json();
 }
+
 export async function getWorker(workerId) {
   const res = await apiFetch(`/api/workers/${workerId}`);
   return res.data ?? res; // unwrap { ok, data } if present
+}
+export function updateOrderStatus(orderId, status) {
+  return apiFetch(`/api/orders/${orderId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function acceptOrder(orderId) {
+  return updateOrderStatus(orderId, "CONFIRMED");
+}
+
+export function startOrder(orderId) {
+  return updateOrderStatus(orderId, "IN_PROGRESS");
+}
+
+export function completeOrder(orderId) {
+  return updateOrderStatus(orderId, "COMPLETED");
+}
+
+export function cancelOrderByWorker(orderId) {
+  return updateOrderStatus(orderId, "CANCELLED_BY_WORKER");
+}
+
+export function cancelOrderByCustomer(orderId) {
+  return updateOrderStatus(orderId, "CANCELLED_BY_CUSTOMER");
 }

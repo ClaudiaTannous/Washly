@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
 const FALLBACK_CITIES = [
   "Haifa",
@@ -29,7 +30,9 @@ const FALLBACK_CITIES = [
 
 function hhmmToMin(v) {
   if (!v) return null;
-  const [h, m] = String(v).split(":").map((x) => parseInt(x, 10));
+  const [h, m] = String(v)
+    .split(":")
+    .map((x) => parseInt(x, 10));
   if (Number.isNaN(h) || Number.isNaN(m)) return null;
   return h * 60 + m;
 }
@@ -47,12 +50,7 @@ function getHourField(row, kind /* "start" | "end" */) {
     );
   }
   return (
-    row?.end_hhmm ||
-    row?.end_time ||
-    row?.end ||
-    row?.to ||
-    row?.endTime ||
-    ""
+    row?.end_hhmm || row?.end_time || row?.end || row?.to || row?.endTime || ""
   );
 }
 
@@ -143,11 +141,15 @@ export default function BookingPageView() {
   });
 
   const [errors, setErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [successModalOpen, setSuccessModalOpen] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState(null);
 
   const workerName = useMemo(() => {
     if (!worker) return "Worker";
     if (worker?.user) {
-      const nm = `${worker.user.first_name || ""} ${worker.user.last_name || ""}`.trim();
+      const nm =
+        `${worker.user.first_name || ""} ${worker.user.last_name || ""}`.trim();
       return nm || "Worker";
     }
     return worker?.profile?.name || worker?.name || "Worker";
@@ -206,7 +208,11 @@ export default function BookingPageView() {
 
         const chosenCity =
           cityFromSearch ||
-          (w?.city_name || w?.user?.city_name || w?.profile?.city || w?.city || "") ||
+          w?.city_name ||
+          w?.user?.city_name ||
+          w?.profile?.city ||
+          w?.city ||
+          "" ||
           "";
 
         setForm((prev) => ({
@@ -215,7 +221,8 @@ export default function BookingPageView() {
           deliveryCity: prev.deliveryCity || chosenCity,
         }));
       } catch (e) {
-        if (!cancelled) setFatalError(e?.message || "Failed loading booking data");
+        if (!cancelled)
+          setFatalError(e?.message || "Failed loading booking data");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -252,14 +259,16 @@ export default function BookingPageView() {
     setErrors((prev) => ({ ...prev, [name]: "" }));
   }
 
-  function validateCurrentStep() {
+  function validateStep(stepToValidate = step) {
     const nextErrors = {};
 
-    if (step === 1) {
+    if (stepToValidate === 1) {
       const n = Number(form.itemsCount);
+
       if (!form.itemsCount || Number.isNaN(n) || n <= 0) {
         nextErrors.itemsCount = "Number of items is required";
       }
+
       if (!form.pickupAt) {
         nextErrors.pickupAt = "Pickup date & time is required";
       } else if (!isWithinBusinessHours(hours, form.pickupAt)) {
@@ -267,20 +276,39 @@ export default function BookingPageView() {
       }
     }
 
-    if (step === 2) {
-      if (!form.pickupCity) nextErrors.pickupCity = "Pickup city is required";
-      if (!form.pickupStreet) nextErrors.pickupStreet = "Pickup street is required";
-      if (!form.pickupApartment) nextErrors.pickupApartment = "Pickup apartment / house is required";
+    if (stepToValidate === 2) {
+      if (!form.pickupCity) {
+        nextErrors.pickupCity = "Pickup city is required";
+      }
+
+      if (!form.pickupStreet) {
+        nextErrors.pickupStreet = "Pickup street is required";
+      }
+
+      if (!form.pickupApartment) {
+        nextErrors.pickupApartment = "Pickup apartment / house is required";
+      }
 
       if (!form.sameAsPickup) {
-        if (!form.deliveryCity) nextErrors.deliveryCity = "Delivery city is required";
-        if (!form.deliveryStreet) nextErrors.deliveryStreet = "Delivery street is required";
-        if (!form.deliveryApartment) nextErrors.deliveryApartment = "Delivery apartment / house is required";
+        if (!form.deliveryCity) {
+          nextErrors.deliveryCity = "Delivery city is required";
+        }
+
+        if (!form.deliveryStreet) {
+          nextErrors.deliveryStreet = "Delivery street is required";
+        }
+
+        if (!form.deliveryApartment) {
+          nextErrors.deliveryApartment =
+            "Delivery apartment / house is required";
+        }
       }
     }
 
-    if (step === 3) {
-      if (!form.paymentMethod) nextErrors.paymentMethod = "Payment method is required";
+    if (stepToValidate === 3) {
+      if (!form.paymentMethod) {
+        nextErrors.paymentMethod = "Payment method is required";
+      }
     }
 
     setErrors(nextErrors);
@@ -288,7 +316,7 @@ export default function BookingPageView() {
   }
 
   function onNext() {
-    if (!validateCurrentStep()) return;
+    if (!validateStep(step)) return;
     setStep((s) => Math.min(3, s + 1));
   }
 
@@ -321,24 +349,119 @@ export default function BookingPageView() {
   }
 
   async function onSubmit() {
-    // validate all steps
-    const current = step;
-    setStep(1);
-    const ok1 = validateCurrentStep();
-    if (!ok1) return;
+    if (submitting) return;
 
-    setStep(2);
-    const ok2 = validateCurrentStep();
-    if (!ok2) return;
+    const ok1 = validateStep(1);
+    if (!ok1) {
+      setStep(1);
+      return;
+    }
 
-    setStep(3);
-    const ok3 = validateCurrentStep();
-    if (!ok3) return;
+    const ok2 = validateStep(2);
+    if (!ok2) {
+      setStep(2);
+      return;
+    }
 
-    setStep(current);
+    const ok3 = validateStep(3);
+    if (!ok3) {
+      setStep(3);
+      return;
+    }
 
-    // TODO: implement POST to /api/orders when you’re ready
-    alert("All good ✅ (submit API call here)");
+    try {
+      setSubmitting(true);
+
+      const customerUserId = localStorage.getItem("userId");
+
+      if (!customerUserId) {
+        setSubmitting(false);
+        alert("You must be logged in to create an order");
+        router.push("/signin");
+        return;
+      }
+
+      const pickupDate = new Date(form.pickupAt);
+
+      const deliveryDate = new Date(pickupDate);
+      deliveryDate.setHours(deliveryDate.getHours() + 4);
+
+      const toNumberOrNull = (value) => {
+        if (value === "" || value == null) return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const toRequiredNumber = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const payload = {
+        customerUserId: String(customerUserId),
+        workerId: String(workerId),
+
+        pickup: {
+          city: form.pickupCity,
+          street: form.pickupStreet,
+          building: toNumberOrNull(form.pickupBuilding),
+          apartmentHouse: toRequiredNumber(form.pickupApartment),
+          floor: toNumberOrNull(form.pickupFloor),
+        },
+
+        delivery: {
+          city: form.sameAsPickup ? form.pickupCity : form.deliveryCity,
+          street: form.sameAsPickup ? form.pickupStreet : form.deliveryStreet,
+          building: form.sameAsPickup
+            ? toNumberOrNull(form.pickupBuilding)
+            : toNumberOrNull(form.deliveryBuilding),
+          apartmentHouse: form.sameAsPickup
+            ? toRequiredNumber(form.pickupApartment)
+            : toRequiredNumber(form.deliveryApartment),
+          floor: form.sameAsPickup
+            ? toNumberOrNull(form.pickupFloor)
+            : toNumberOrNull(form.deliveryFloor),
+        },
+
+        scheduledPickup: pickupDate.toISOString(),
+        scheduledDropoff: deliveryDate.toISOString(),
+
+        itemsCount: Number(form.itemsCount),
+        paymentMethod: form.paymentMethod.toUpperCase(),
+
+        notes: form.notes || null,
+      };
+
+      console.log("CREATE ORDER PAYLOAD:", payload);
+
+      const res = await fetch(`${API_BASE}/api/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      let data = {};
+
+      try {
+        data = await res.json();
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || data.message || "Failed to create order");
+      }
+
+      setCreatedOrder(data);
+      setSuccessModalOpen(true);
+    } catch (error) {
+      console.error("CREATE ORDER ERROR:", error);
+      alert(error.message || "Something went wrong while creating the order");
+      setSubmitting(false);
+    }
   }
 
   if (loading) {
@@ -369,7 +492,9 @@ export default function BookingPageView() {
   return (
     <div className="min-h-screen bg-[#EBF8FB] py-10 px-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-5xl font-black text-center">Book Laundry Service</h1>
+        <h1 className="text-5xl font-black text-center">
+          Book Laundry Service
+        </h1>
         <p className="text-center text-slate-600 mt-3">
           Complete the steps below to confirm your booking.
         </p>
@@ -419,21 +544,27 @@ export default function BookingPageView() {
           <main className="lg:col-span-8 bg-white rounded-3xl border border-slate-100 shadow-sm p-8">
             {/* step header */}
             <div className="flex items-center gap-6">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 1 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 1 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}
+              >
                 1
               </div>
               <div className="font-bold">Schedule</div>
 
               <div className="flex-1 h-px bg-slate-200 mx-2" />
 
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 2 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}
+              >
                 2
               </div>
               <div className="font-bold">Addresses</div>
 
               <div className="flex-1 h-px bg-slate-200 mx-2" />
 
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 3 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step === 3 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}
+              >
                 3
               </div>
               <div className="font-bold">Payment</div>
@@ -442,7 +573,11 @@ export default function BookingPageView() {
             <div className="mt-8 border-t border-slate-100 pt-8">
               {step === 1 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Field label="Number of items" required error={errors.itemsCount}>
+                  <Field
+                    label="Number of items"
+                    required
+                    error={errors.itemsCount}
+                  >
                     <input
                       className={inputClass(!!errors.itemsCount)}
                       value={form.itemsCount}
@@ -452,7 +587,11 @@ export default function BookingPageView() {
                     />
                   </Field>
 
-                  <Field label="Pickup date & time" required error={errors.pickupAt}>
+                  <Field
+                    label="Pickup date & time"
+                    required
+                    error={errors.pickupAt}
+                  >
                     <input
                       type="datetime-local"
                       className={inputClass(!!errors.pickupAt)}
@@ -473,7 +612,9 @@ export default function BookingPageView() {
                         <select
                           className={inputClass(!!errors.pickupCity)}
                           value={form.pickupCity}
-                          onChange={(e) => setField("pickupCity", e.target.value)}
+                          onChange={(e) =>
+                            setField("pickupCity", e.target.value)
+                          }
                         >
                           <option value="">Choose a city</option>
                           {cityOptions.map((c) => (
@@ -484,11 +625,17 @@ export default function BookingPageView() {
                         </select>
                       </Field>
 
-                      <Field label="Street" required error={errors.pickupStreet}>
+                      <Field
+                        label="Street"
+                        required
+                        error={errors.pickupStreet}
+                      >
                         <input
                           className={inputClass(!!errors.pickupStreet)}
                           value={form.pickupStreet}
-                          onChange={(e) => setField("pickupStreet", e.target.value)}
+                          onChange={(e) =>
+                            setField("pickupStreet", e.target.value)
+                          }
                           placeholder="e.g. Derech Allenby"
                         />
                       </Field>
@@ -497,16 +644,24 @@ export default function BookingPageView() {
                         <input
                           className={inputClass(false)}
                           value={form.pickupBuilding}
-                          onChange={(e) => setField("pickupBuilding", e.target.value)}
+                          onChange={(e) =>
+                            setField("pickupBuilding", e.target.value)
+                          }
                           placeholder="e.g. 10"
                         />
                       </Field>
 
-                      <Field label="Apartment / House" required error={errors.pickupApartment}>
+                      <Field
+                        label="Apartment / House"
+                        required
+                        error={errors.pickupApartment}
+                      >
                         <input
                           className={inputClass(!!errors.pickupApartment)}
                           value={form.pickupApartment}
-                          onChange={(e) => setField("pickupApartment", e.target.value)}
+                          onChange={(e) =>
+                            setField("pickupApartment", e.target.value)
+                          }
                           placeholder="e.g. 4A"
                         />
                       </Field>
@@ -515,7 +670,9 @@ export default function BookingPageView() {
                         <input
                           className={inputClass(false)}
                           value={form.pickupFloor}
-                          onChange={(e) => setField("pickupFloor", e.target.value)}
+                          onChange={(e) =>
+                            setField("pickupFloor", e.target.value)
+                          }
                           placeholder="e.g. 2"
                         />
                       </Field>
@@ -529,18 +686,26 @@ export default function BookingPageView() {
                         <input
                           type="checkbox"
                           checked={form.sameAsPickup}
-                          onChange={(e) => setField("sameAsPickup", e.target.checked)}
+                          onChange={(e) =>
+                            setField("sameAsPickup", e.target.checked)
+                          }
                         />
                         Same as pickup
                       </label>
                     </div>
 
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Field label="City" required={!form.sameAsPickup} error={errors.deliveryCity}>
+                      <Field
+                        label="City"
+                        required={!form.sameAsPickup}
+                        error={errors.deliveryCity}
+                      >
                         <select
                           className={inputClass(!!errors.deliveryCity)}
                           value={form.deliveryCity}
-                          onChange={(e) => setField("deliveryCity", e.target.value)}
+                          onChange={(e) =>
+                            setField("deliveryCity", e.target.value)
+                          }
                           disabled={form.sameAsPickup}
                         >
                           <option value="">Choose a city</option>
@@ -552,11 +717,17 @@ export default function BookingPageView() {
                         </select>
                       </Field>
 
-                      <Field label="Street" required={!form.sameAsPickup} error={errors.deliveryStreet}>
+                      <Field
+                        label="Street"
+                        required={!form.sameAsPickup}
+                        error={errors.deliveryStreet}
+                      >
                         <input
                           className={inputClass(!!errors.deliveryStreet)}
                           value={form.deliveryStreet}
-                          onChange={(e) => setField("deliveryStreet", e.target.value)}
+                          onChange={(e) =>
+                            setField("deliveryStreet", e.target.value)
+                          }
                           placeholder="e.g. Ben Yehuda"
                           disabled={form.sameAsPickup}
                         />
@@ -566,17 +737,25 @@ export default function BookingPageView() {
                         <input
                           className={inputClass(false)}
                           value={form.deliveryBuilding}
-                          onChange={(e) => setField("deliveryBuilding", e.target.value)}
+                          onChange={(e) =>
+                            setField("deliveryBuilding", e.target.value)
+                          }
                           placeholder="e.g. 10"
                           disabled={form.sameAsPickup}
                         />
                       </Field>
 
-                      <Field label="Apartment / House" required={!form.sameAsPickup} error={errors.deliveryApartment}>
+                      <Field
+                        label="Apartment / House"
+                        required={!form.sameAsPickup}
+                        error={errors.deliveryApartment}
+                      >
                         <input
                           className={inputClass(!!errors.deliveryApartment)}
                           value={form.deliveryApartment}
-                          onChange={(e) => setField("deliveryApartment", e.target.value)}
+                          onChange={(e) =>
+                            setField("deliveryApartment", e.target.value)
+                          }
                           placeholder="e.g. 2"
                           disabled={form.sameAsPickup}
                         />
@@ -586,7 +765,9 @@ export default function BookingPageView() {
                         <input
                           className={inputClass(false)}
                           value={form.deliveryFloor}
-                          onChange={(e) => setField("deliveryFloor", e.target.value)}
+                          onChange={(e) =>
+                            setField("deliveryFloor", e.target.value)
+                          }
                           placeholder="e.g. 1"
                           disabled={form.sameAsPickup}
                         />
@@ -598,11 +779,17 @@ export default function BookingPageView() {
 
               {step === 3 && (
                 <div className="space-y-6">
-                  <Field label="Payment method" required error={errors.paymentMethod}>
+                  <Field
+                    label="Payment method"
+                    required
+                    error={errors.paymentMethod}
+                  >
                     <select
                       className={inputClass(!!errors.paymentMethod)}
                       value={form.paymentMethod}
-                      onChange={(e) => setField("paymentMethod", e.target.value)}
+                      onChange={(e) =>
+                        setField("paymentMethod", e.target.value)
+                      }
                     >
                       <option value="cash">Cash</option>
                       <option value="bit">Bit</option>
@@ -628,7 +815,9 @@ export default function BookingPageView() {
                 onClick={onBack}
                 disabled={step === 1}
                 className={`px-6 py-3 rounded-2xl border ${
-                  step === 1 ? "bg-slate-100 text-slate-400 border-slate-100" : "border-slate-200 hover:bg-slate-50"
+                  step === 1
+                    ? "bg-slate-100 text-slate-400 border-slate-100"
+                    : "border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 Back
@@ -646,12 +835,52 @@ export default function BookingPageView() {
                 <button
                   type="button"
                   onClick={onSubmit}
-                  className="px-8 py-3 rounded-2xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition"
+                  disabled={submitting}
+                  className={`px-8 py-3 rounded-2xl text-white font-bold transition ${
+                    submitting
+                      ? "bg-slate-400 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
                 >
-                  Confirm booking
+                  {submitting ? "Creating order..." : "Confirm booking"}
                 </button>
               )}
             </div>
+            {successModalOpen && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
+                  <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
+                    <span className="text-3xl">✓</span>
+                  </div>
+
+                  <h2 className="text-center text-2xl font-bold text-slate-900">
+                    Booking created
+                  </h2>
+
+                  <p className="mt-3 text-center text-slate-600">
+                    Your order was sent to the worker and is now waiting for
+                    approval.
+                  </p>
+
+                  {createdOrder?.id && (
+                    <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-center">
+                      <p className="text-sm text-slate-500">Order number</p>
+                      <p className="text-xl font-bold text-slate-800">
+                        #{createdOrder.id}
+                      </p>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => router.push("/customer")}
+                    className="mt-6 w-full rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
+                  >
+                    Go to my orders
+                  </button>
+                </div>
+              </div>
+            )}
           </main>
         </div>
       </div>

@@ -12,32 +12,47 @@ exports.createRating = async (req, res) => {
     const body = req.body;
 
     // 1) Validate required fields
-    if (
-      !body.orderId ||
-      !body.raterId ||
-      !body.workerId ||
-      body.score == null
-    ) {
+    // The frontend should only send: orderId, score, comment
+    if (!body.orderId || body.score == null) {
       return res.status(400).json({
-        error: "Missing required fields (orderId, raterId, workerId, score)",
+        error: "Missing required fields (orderId, score)",
+      });
+    }
+
+    // 2) Validate orderId format
+    if (!/^\d+$/.test(String(body.orderId))) {
+      return res.status(400).json({
+        error: "Invalid order id format",
       });
     }
 
     const orderId = BigInt(body.orderId);
-    const raterId = BigInt(body.raterId);
-    const workerId = BigInt(body.workerId);
+
+    // Important:
+    // raterId must come from the logged-in user, not from the request body
+    const loggedInUserId = req.user?.userId ?? req.user?.id;
+
+    if (!loggedInUserId) {
+      return res.status(401).json({
+        error: "Unauthorized",
+      });
+    }
+
+    const raterId = BigInt(loggedInUserId);
     const score = Number(body.score);
 
-    // 2) Validate score
+    // 3) Validate score
     if (!Number.isInteger(score) || score < MIN_SCORE || score > MAX_SCORE) {
       return res.status(400).json({
         error: `score must be an integer between ${MIN_SCORE} and ${MAX_SCORE}`,
       });
     }
 
-    // 3) Load order and validate ownership & status
+    // 4) Load order and validate ownership/status
     const order = await prisma.order.findUnique({
-      where: { id: orderId },
+      where: {
+        id: orderId,
+      },
       select: {
         id: true,
         status: true,
@@ -48,43 +63,38 @@ exports.createRating = async (req, res) => {
     });
 
     if (!order) {
-      return res.status(404).json({ error: "Order not found" });
+      return res.status(404).json({
+        error: "Order not found",
+      });
     }
 
-    // Only the customer who placed the order can rate
+    // Only the customer who placed the order can rate it
     if (order.customer_user_id !== raterId) {
       return res.status(403).json({
         error: "Only the customer who placed the order can rate it",
       });
     }
 
-    // Rating must be for the same worker
-    if (order.worker_id !== workerId) {
-      return res.status(400).json({
-        error: "Rating worker does not match order worker",
-      });
-    }
-
-    // Order must be completed
+    // Order must be completed before rating
     if (order.status !== "COMPLETED") {
       return res.status(400).json({
         error: "Order must be COMPLETED before it can be rated",
       });
     }
 
-    // Prevent duplicate ratings (enforced also by schema @unique)
+    // Prevent duplicate ratings
     if (order.Rating) {
       return res.status(409).json({
         error: "Order has already been rated",
       });
     }
 
-    // 4) Create rating
+    // 5) Create rating
     const rating = await prisma.rating.create({
       data: {
         order_id: orderId,
         rater_id: raterId,
-        rated_worker: workerId,
+        rated_worker: order.worker_id,
         score,
         comment: body.comment || null,
       },
@@ -107,17 +117,31 @@ exports.createRating = async (req, res) => {
             },
           },
         },
+        Order: {
+          select: {
+            id: true,
+            status: true,
+          },
+        },
+        Photos: true,
       },
     });
 
-    return res.status(201).json(rating);
+    return res.status(201).json({
+      message: "Rating created successfully",
+      rating,
+    });
   } catch (error) {
     if (error.code === "P2002") {
-      return res.status(409).json({ error: "Duplicate rating" });
+      return res.status(409).json({
+        error: "Duplicate rating",
+      });
     }
 
     console.error("Create Rating Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -128,8 +152,10 @@ exports.getRatingByOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
 
-    if (!/^\d+$/.test(orderId)) {
-      return res.status(400).json({ error: "Invalid order id format" });
+    if (!/^\d+$/.test(String(orderId))) {
+      return res.status(400).json({
+        error: "Invalid order id format",
+      });
     }
 
     const rating = await prisma.rating.findUnique({
@@ -137,28 +163,50 @@ exports.getRatingByOrder = async (req, res) => {
         order_id: BigInt(orderId),
       },
       include: {
-        Rater: true,
+        Rater: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+          },
+        },
         Worker: {
           include: {
-            user: true,
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+              },
+            },
           },
         },
-        Photos: {
-          include: {
-            Media: true,
+        Order: {
+          select: {
+            id: true,
+            status: true,
+            customer_user_id: true,
+            worker_id: true,
           },
         },
+
+        // Your schema has RatingPhoto, but no Media relation
+        Photos: true,
       },
     });
 
     if (!rating) {
-      return res.status(404).json({ error: "Rating not found" });
+      return res.status(404).json({
+        error: "Rating not found",
+      });
     }
 
     return res.json(rating);
   } catch (error) {
     console.error("Get Rating Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -169,12 +217,14 @@ exports.getWorkerRatings = async (req, res) => {
   try {
     const { workerId } = req.params;
 
-    // 1️⃣ Validate workerId format
-    if (!/^\d+$/.test(workerId)) {
-      return res.status(400).json({ error: "Invalid worker id format" });
+    // 1) Validate workerId format
+    if (!/^\d+$/.test(String(workerId))) {
+      return res.status(400).json({
+        error: "Invalid worker id format",
+      });
     }
 
-    // 2️⃣ Query ratings
+    // 2) Query ratings
     const ratings = await prisma.rating.findMany({
       where: {
         rated_worker: BigInt(workerId),
@@ -183,7 +233,7 @@ exports.getWorkerRatings = async (req, res) => {
         created_at: "desc",
       },
       include: {
-        // who wrote the rating
+        // Customer who wrote the rating
         Rater: {
           select: {
             id: true,
@@ -192,48 +242,71 @@ exports.getWorkerRatings = async (req, res) => {
           },
         },
 
-        // photos attached to rating (NO Media include – not in schema)
+        // Photos attached to rating
+        // No Media include because Media is not in your current schema
         Photos: true,
 
-        // related order info (minimal, safe)
+        // Related order info
         Order: {
           select: {
             id: true,
+            status: true,
           },
         },
       },
     });
 
-    // 3️⃣ Return result
-    return res.json(ratings);
+    // 3) Calculate rating summary
+    const averageScore =
+      ratings.length > 0
+        ? ratings.reduce((sum, rating) => sum + rating.score, 0) /
+          ratings.length
+        : 0;
+
+    // 4) Return ratings + summary
+    return res.json({
+      ratings,
+      averageScore: Number(averageScore.toFixed(1)),
+      totalRatings: ratings.length,
+    });
   } catch (error) {
     console.error("Get Worker Ratings Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
 // ---------------------------
-// DELETE RATING (admin or owner – optional use)
+// DELETE RATING
 // ---------------------------
 exports.deleteRating = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid rating id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid rating id format",
+      });
     }
 
     await prisma.rating.delete({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
     });
 
     return res.status(204).send();
   } catch (error) {
     if (error.code === "P2025") {
-      return res.status(404).json({ error: "Rating not found" });
+      return res.status(404).json({
+        error: "Rating not found",
+      });
     }
 
     console.error("Delete Rating Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };

@@ -1,4 +1,5 @@
 const express = require("express");
+
 const {
   createRating,
   getRatingByOrder,
@@ -6,18 +7,24 @@ const {
   deleteRating,
 } = require("../controllers/ratings");
 
+const { requireAuth } = require("../middlewares/auth");
+
 const router = express.Router();
 
 // Create rating
-router.post("/ratings", createRating);
+// POST /api/ratings
+router.post("/ratings", requireAuth, createRating);
 
 // Get rating for a specific order
+// GET /api/ratings/order/:orderId
 router.get("/ratings/order/:orderId", getRatingByOrder);
 
 // Get all ratings for a worker
+// GET /api/ratings/worker/:workerId
 router.get("/ratings/worker/:workerId", getWorkerRatings);
 
 // Delete rating
-router.delete("/ratings/:id", deleteRating);
+// DELETE /api/ratings/:id
+router.delete("/ratings/:id", requireAuth, deleteRating);
 
 module.exports = router;

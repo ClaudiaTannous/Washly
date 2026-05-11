@@ -1,7 +1,7 @@
 const prisma = require("../prisma");
 const { canWorkerTakeOrder } = require("../utils/availability");
 
-// Allowed enum values (keep in sync with schema.prisma)
+// Allowed enum values
 const ORDER_STATUSES = [
   "REQUESTED",
   "CONFIRMED",
@@ -14,21 +14,85 @@ const ORDER_STATUSES = [
 const PAYMENT_METHODS = ["CASH", "BIT"];
 
 // ---------------------------
-// CREATE ORDER (with booking + wash pricing + payment)
+// HELPER: CREATE NOTIFICATION
+// ---------------------------
+async function createNotification({ userId, orderId, type, title, message }) {
+  return prisma.notification.create({
+    data: {
+      user_id: BigInt(userId),
+      order_id: orderId ? BigInt(orderId) : null,
+      type,
+      title,
+      message,
+    },
+  });
+}
+
+// ---------------------------
+// HELPER: STATUS MESSAGE
+// ---------------------------
+function getStatusNotification(status) {
+  switch (status) {
+    case "CONFIRMED":
+      return {
+        type: "ORDER_ACCEPTED",
+        title: "Order accepted",
+        message: "Your laundry order was accepted by the worker.",
+      };
+
+    case "IN_PROGRESS":
+      return {
+        type: "ORDER_STATUS_UPDATED",
+        title: "Order in progress",
+        message: "The worker started working on your laundry order.",
+      };
+
+    case "COMPLETED":
+      return {
+        type: "ORDER_COMPLETED",
+        title: "Order completed",
+        message: "Your laundry order was completed.",
+      };
+
+    case "CANCELLED_BY_WORKER":
+      return {
+        type: "ORDER_CANCELLED",
+        title: "Order cancelled",
+        message: "Your laundry order was cancelled by the worker.",
+      };
+
+    case "CANCELLED_BY_CUSTOMER":
+      return {
+        type: "ORDER_CANCELLED",
+        title: "Order cancelled",
+        message: "The customer cancelled the laundry order.",
+      };
+
+    default:
+      return {
+        type: "ORDER_STATUS_UPDATED",
+        title: "Order updated",
+        message: `Your order status was updated to ${status}.`,
+      };
+  }
+}
+
+// ---------------------------
+// CREATE ORDER
 // ---------------------------
 exports.createOrder = async (req, res) => {
   try {
     console.log("createOrder req.body:", JSON.stringify(req.body, null, 2));
+
     const body = req.body;
 
-    // 1) Validate required fields from client
     if (
       !body.customerUserId ||
       !body.workerId ||
       !body.pickup ||
       !body.delivery ||
       !body.scheduledPickup ||
-      body.itemsCount == null || // must exist, can be 0+ but we'll check >0
+      body.itemsCount == null ||
       !body.paymentMethod
     ) {
       return res.status(400).json({
@@ -37,74 +101,80 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    // Validate payment method enum
     if (!PAYMENT_METHODS.includes(body.paymentMethod)) {
-      return res
-        .status(400)
-        .json({ error: "paymentMethod must be CASH or BIT" });
+      return res.status(400).json({
+        error: "paymentMethod must be CASH or BIT",
+      });
     }
 
-    // Parse and validate items count
     const itemsCount = Number(body.itemsCount);
+
     if (!Number.isFinite(itemsCount) || itemsCount <= 0) {
-      return res
-        .status(400)
-        .json({ error: "itemsCount must be a positive number" });
+      return res.status(400).json({
+        error: "itemsCount must be a positive number",
+      });
     }
 
-    // 2) Parse pickup datetime
     const pickupDate = new Date(body.scheduledPickup);
+
     if (isNaN(pickupDate.getTime())) {
-      return res
-        .status(400)
-        .json({ error: "Invalid scheduledPickup datetime" });
+      return res.status(400).json({
+        error: "Invalid scheduledPickup datetime",
+      });
     }
 
     const customerIdBigInt = BigInt(body.customerUserId);
     const workerIdBigInt = BigInt(body.workerId);
 
-    // 3) Load worker with schedule & existing orders + pricing
     const worker = await prisma.worker.findUnique({
-      where: { id: workerIdBigInt },
+      where: {
+        id: workerIdBigInt,
+      },
       include: {
-        Hours: true, // WorkerBusinessHours
-        Orders: true, // used by canWorkerTakeOrder to count today's bookings
+        Hours: true,
+        Orders: true,
+        user: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+          },
+        },
       },
     });
 
     if (!worker) {
-      return res.status(404).json({ error: "Worker not found" });
+      return res.status(404).json({
+        error: "Worker not found",
+      });
     }
 
-    // 4) Check if worker can take this order at this time (booking rules)
     if (!canWorkerTakeOrder(worker, pickupDate)) {
       return res.status(400).json({
         error: "Worker is not available at the requested pickup time",
       });
     }
 
-    // 5) Calculate washes and total amount based on worker's capacity & price
     const maxItemsPerWash =
       typeof worker.max_items_per_wash === "number" &&
       worker.max_items_per_wash > 0
         ? worker.max_items_per_wash
-        : 10; // fallback
+        : 10;
 
     const pricePerWash =
       typeof worker.price_per_wash === "number" && worker.price_per_wash > 0
         ? worker.price_per_wash
-        : 30; // fallback
+        : 30;
 
     const washesCount = Math.ceil(itemsCount / maxItemsPerWash);
     const totalAmount = washesCount * pricePerWash;
 
-    // 6) Determine initial status (optional override from body)
     let status = "REQUESTED";
+
     if (body.status && ORDER_STATUSES.includes(body.status)) {
       status = body.status;
     }
 
-    // 7) Create order with all logic applied
     const order = await prisma.order.create({
       data: {
         customer_user_id: customerIdBigInt,
@@ -115,13 +185,13 @@ exports.createOrder = async (req, res) => {
         pickup_city: body.pickup.city,
         pickup_street: body.pickup.street,
         pickup_building: body.pickup.building ?? null,
-        pickup_apartment_house: body.pickup.apartmentHouse ?? null,
+        pickup_apartment_house: body.pickup.apartmentHouse ?? 0,
         pickup_floor: body.pickup.floor ?? null,
 
         delivery_city: body.delivery.city,
         delivery_street: body.delivery.street,
         delivery_building: body.delivery.building ?? null,
-        delivery_apartment_house: body.delivery.apartmentHouse ?? null,
+        delivery_apartment_house: body.delivery.apartmentHouse ?? 0,
         delivery_floor: body.delivery.floor ?? null,
 
         scheduled_pickup: pickupDate,
@@ -129,28 +199,54 @@ exports.createOrder = async (req, res) => {
           ? new Date(body.scheduledDropoff)
           : null,
 
-        // 🧺 quantity & pricing
         items_count: itemsCount,
         washes_count: washesCount,
         amount: totalAmount,
 
-        // 💰 payment
-        payment_method: body.paymentMethod, // CASH or BIT
-        // payment_status defaults to UNPAID in schema
+        payment_method: body.paymentMethod,
         payment_notes: body.paymentNotes || null,
 
         notes: body.notes || null,
       },
       include: {
-        Customer: true,
-        Worker: true,
+        Customer: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+            phone: true,
+            city_name: true,
+          },
+        },
+        Worker: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+              },
+            },
+          },
+        },
+        Notifications: true,
       },
+    });
+
+    await createNotification({
+      userId: workerIdBigInt,
+      orderId: order.id,
+      type: "ORDER_RECEIVED",
+      title: "New order received",
+      message: "You received a new laundry order from a customer.",
     });
 
     return res.status(201).json(order);
   } catch (error) {
     console.error("Create Order Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -162,16 +258,25 @@ exports.getAllOrders = async (req, res) => {
     const orders = await prisma.order.findMany({
       include: {
         Customer: true,
-        Worker: true,
-        // no Items relation anymore
+        Worker: {
+          include: {
+            user: true,
+          },
+        },
+        Rating: true,
+        Notifications: true,
       },
-      orderBy: { created_at: "desc" },
+      orderBy: {
+        created_at: "desc",
+      },
     });
 
     return res.json(orders);
   } catch (error) {
     console.error("Get Orders Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -182,27 +287,45 @@ exports.getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid order id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid order id format",
+      });
     }
 
     const order = await prisma.order.findUnique({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
       include: {
         Customer: true,
-        Worker: true,
-        // no Items relation anymore
+        Worker: {
+          include: {
+            user: true,
+          },
+        },
+        Rating: true,
+        PaymentProofs: true,
+        Notifications: {
+          orderBy: {
+            created_at: "desc",
+          },
+        },
       },
     });
 
     if (!order) {
-      return res.status(404).json({ error: "Order not found" });
+      return res.status(404).json({
+        error: "Order not found",
+      });
     }
 
     return res.json(order);
   } catch (error) {
     console.error("Get Order Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -214,8 +337,10 @@ exports.updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid order id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid order id format",
+      });
     }
 
     if (!status || !ORDER_STATUSES.includes(status)) {
@@ -224,42 +349,95 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
 
-    // Optional rule: cannot mark COMPLETED if payment not PAID
-    if (status === "COMPLETED") {
-      const existing = await prisma.order.findUnique({
-        where: { id: BigInt(id) },
-        select: { payment_status: true },
-      });
-
-      if (!existing) {
-        return res.status(404).json({ error: "Order not found" });
-      }
-
-      if (existing.payment_status !== "PAID") {
-        return res.status(400).json({
-          error: "Order cannot be completed until payment_status is PAID",
-        });
-      }
-    }
-
-    const updatedOrder = await prisma.order.update({
-      where: { id: BigInt(id) },
-      data: { status },
+    const existingOrder = await prisma.order.findUnique({
+      where: {
+        id: BigInt(id),
+      },
       select: {
         id: true,
         status: true,
-        updated_at: true,
+        customer_user_id: true,
+        worker_id: true,
+        payment_status: true,
       },
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        error: "Order not found",
+      });
+    }
+
+    const updateData = {
+      status,
+      updated_at: new Date(),
+    };
+
+    // In Washly, when the worker marks the order as completed,
+    // it means the worker met the customer, received the payment,
+    // and finished the order.
+    if (status === "COMPLETED") {
+      updateData.payment_status = "PAID";
+      updateData.payment_confirmed_at = new Date();
+      updateData.payment_confirmed_by = existingOrder.worker_id;
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: {
+        id: BigInt(id),
+      },
+      data: updateData,
+      include: {
+        Customer: {
+          select: {
+            id: true,
+            first_name: true,
+            last_name: true,
+          },
+        },
+        Worker: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+              },
+            },
+          },
+        },
+        Rating: true,
+      },
+    });
+
+    const notification = getStatusNotification(status);
+
+    let notificationUserId = existingOrder.customer_user_id;
+
+    if (status === "CANCELLED_BY_CUSTOMER") {
+      notificationUserId = existingOrder.worker_id;
+    }
+
+    await createNotification({
+      userId: notificationUserId,
+      orderId: existingOrder.id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
     });
 
     return res.json(updatedOrder);
   } catch (error) {
     if (error.code === "P2025") {
-      return res.status(404).json({ error: "Order not found" });
+      return res.status(404).json({
+        error: "Order not found",
+      });
     }
 
-    console.error(error);
-    return res.status(500).json({ error: error.message });
+    console.error("Update Order Status Error:", error);
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -270,22 +448,30 @@ exports.deleteOrder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid order id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid order id format",
+      });
     }
 
     await prisma.order.delete({
-      where: { id: BigInt(id) },
+      where: {
+        id: BigInt(id),
+      },
     });
 
     return res.status(204).send();
   } catch (error) {
     if (error.code === "P2025") {
-      return res.status(404).json({ error: "Order not found" });
+      return res.status(404).json({
+        error: "Order not found",
+      });
     }
 
-    console.error(error);
-    return res.status(500).json({ error: error.message });
+    console.error("Delete Order Error:", error);
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -297,8 +483,10 @@ exports.getUserOrders = async (req, res) => {
     const { id } = req.params;
     const { status } = req.query;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid user id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid user id format",
+      });
     }
 
     const where = {
@@ -308,20 +496,30 @@ exports.getUserOrders = async (req, res) => {
 
     const orders = await prisma.order.findMany({
       where,
-      orderBy: { created_at: "desc" },
+      orderBy: {
+        created_at: "desc",
+      },
       include: {
         Worker: {
           include: {
             user: true,
           },
-        }
+        },
+        Rating: true,
+        Notifications: {
+          orderBy: {
+            created_at: "desc",
+          },
+        },
       },
     });
 
     return res.json(orders);
   } catch (error) {
     console.error("Get User Orders Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };
 
@@ -333,8 +531,10 @@ exports.getWorkerOrderHistory = async (req, res) => {
     const { id } = req.params;
     const { status } = req.query;
 
-    if (!/^\d+$/.test(id)) {
-      return res.status(400).json({ error: "Invalid worker id format" });
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({
+        error: "Invalid worker id format",
+      });
     }
 
     const where = {
@@ -344,15 +544,25 @@ exports.getWorkerOrderHistory = async (req, res) => {
 
     const orders = await prisma.order.findMany({
       where,
-      orderBy: { created_at: "desc" },
+      orderBy: {
+        created_at: "desc",
+      },
       include: {
         Customer: true,
+        Rating: true,
+        Notifications: {
+          orderBy: {
+            created_at: "desc",
+          },
+        },
       },
     });
 
     return res.json(orders);
   } catch (error) {
     console.error("Get Worker Orders Error:", error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: error.message,
+    });
   }
 };

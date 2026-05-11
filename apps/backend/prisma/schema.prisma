@@ -31,6 +31,17 @@ enum PaymentStatus {
   PAID                 // worker confirmed payment
 }
 
+enum NotificationType {
+  ORDER_RECEIVED
+  ORDER_ACCEPTED
+  ORDER_REJECTED
+  ORDER_STATUS_UPDATED
+  PAYMENT_UPDATED
+  ORDER_COMPLETED
+  ORDER_CANCELLED
+  GENERAL
+}
+
 //
 // ========= MODELS =========
 //
@@ -49,13 +60,14 @@ model User {
   apartment_house_number Int?
   floor_number           Int?
   description            String?
-  created_at             DateTime     @default(now())
-  updated_at             DateTime     @default(now())
- 
-  OrdersAsCustomer       Order[]      @relation("orders_as_customer")
-  RatingsAuthored        Rating[]     @relation("rating_rater")
+  created_at             DateTime            @default(now())
+  updated_at             DateTime            @default(now())
+
+  OrdersAsCustomer       Order[]             @relation("orders_as_customer")
+  RatingsAuthored        Rating[]            @relation("rating_rater")
   Worker                 Worker?
   PaymentProofsUploaded  OrderPaymentProof[] @relation("OrderPaymentProof_User")
+  Notifications          Notification[]      @relation("UserNotifications")
 
   @@index([email])
 }
@@ -80,7 +92,7 @@ model Worker {
   user                User                  @relation(fields: [id], references: [id], onDelete: Cascade)
   Hours               WorkerBusinessHours[] @relation("WorkerHours")
   Services            WorkerService[]
-    AIConversations     AIConversation[]
+  AIConversations     AIConversation[]
 }
 
 model WorkerBusinessHours {
@@ -88,6 +100,7 @@ model WorkerBusinessHours {
   day_of_week Int
   start_hhmm  String
   end_hhmm    String
+
   Worker      Worker @relation("WorkerHours", fields: [worker_id], references: [id], onDelete: Cascade)
 
   @@id([worker_id, day_of_week, start_hhmm])
@@ -100,6 +113,7 @@ model ServiceCatalog {
   default_proximate_turnaround_hours Int?
   description                        String?
   delicate_fabric                    Boolean         @default(false)
+
   WorkerServices                     WorkerService[]
 }
 
@@ -107,11 +121,12 @@ model WorkerService {
   worker_id                  BigInt
   service_code               String
   is_active                  Boolean        @default(true)
-  base_price                 Int            @default(0)    // your addition
+  base_price                 Int            @default(0)
   min_qty                    Decimal?
   max_qty                    Decimal?
   turnaround_proximate_hours Int?
   notes                      String?
+
   Service                    ServiceCatalog @relation(fields: [service_code], references: [service_code])
   Worker                     Worker         @relation(fields: [worker_id], references: [id], onDelete: Cascade)
 
@@ -128,13 +143,13 @@ model Order {
   pickup_city              String
   pickup_street            String
   pickup_building          Int?
-  pickup_apartment_house   Int           // required
+  pickup_apartment_house   Int
   pickup_floor             Int?
 
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
-  delivery_apartment_house Int           // required
+  delivery_apartment_house Int
   delivery_floor           Int?
 
   scheduled_pickup         DateTime?
@@ -158,18 +173,25 @@ model Order {
   Worker                   Worker        @relation("orders_as_worker", fields: [worker_id], references: [id])
   Rating                   Rating?
   PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
+  Notifications            Notification[]      @relation("OrderNotifications")
+
+  @@index([customer_user_id])
+  @@index([worker_id])
+  @@index([status])
+  @@index([created_at])
 }
 
 model AIConversation {
   id         BigInt      @id @default(autoincrement())
   worker_id  BigInt
+
   Worker     Worker      @relation(fields: [worker_id], references: [id], onDelete: Cascade)
   messages   AIMessage[]
 
   @@index([worker_id])
-  @@unique([worker_id])   
-
+  @@unique([worker_id])
 }
+
 enum AIMessageRole {
   USER
   AI
@@ -186,7 +208,6 @@ model AIMessage {
   @@index([conversationId])
 }
 
-
 model Rating {
   id           BigInt        @id @default(autoincrement())
   order_id     BigInt        @unique
@@ -195,6 +216,7 @@ model Rating {
   score        Int
   comment      String?
   created_at   DateTime      @default(now())
+
   Order        Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
   Worker       Worker        @relation("rating_worker", fields: [rated_worker], references: [id], onDelete: Cascade)
   Rater        User          @relation("rating_rater", fields: [rater_id], references: [id], onDelete: Cascade)
@@ -219,9 +241,32 @@ model OrderPaymentProof {
   uploaded_by BigInt
   created_at  DateTime   @default(now())
 
-  Order    Order      @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
-
-  Uploader User       @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
+  Order        Order      @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
+  Uploader     User       @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
 
   @@index([order_id])
+}
+
+model Notification {
+  id          BigInt           @id @default(autoincrement())
+
+  user_id     BigInt
+  order_id    BigInt?
+
+  type        NotificationType
+  title       String
+  message     String
+
+  is_read     Boolean          @default(false)
+  created_at  DateTime         @default(now())
+  read_at     DateTime?
+
+  User        User             @relation("UserNotifications", fields: [user_id], references: [id], onDelete: Cascade)
+  Order       Order?           @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([order_id])
+  @@index([type])
+  @@index([is_read])
+  @@index([created_at])
 }

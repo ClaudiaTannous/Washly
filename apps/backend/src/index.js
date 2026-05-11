@@ -21,8 +21,9 @@ const orderRoutes = require("./routes/order");
 const serviceCatalogRoutes = require("./routes/serviceCatalog");
 const workerServiceRoutes = require("./routes/workerService");
 const ratingRoutes = require("./routes/ratings");
-const searchRoutes = require("./routes/search"); // your route
+const searchRoutes = require("./routes/search");
 const aiRoutes = require("./routes/Ai");
+const notificationRoutes = require("./routes/notifications");
 
 dotenv.config();
 
@@ -39,10 +40,10 @@ app.set("trust proxy", 1);
 app.use(
   cors({
     origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
-    credentials: true, // cookies
+    credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 
 /* ---------------------------------------------------
@@ -55,11 +56,15 @@ app.use(express.json());
    Ensure uploads folder exists
 --------------------------------------------------- */
 const uploadRoot = path.join(__dirname, "..", "uploads");
-
 const avatarFolder = path.join(uploadRoot, "avatars");
 
-if (!fs.existsSync(uploadRoot)) fs.mkdirSync(uploadRoot);
-if (!fs.existsSync(avatarFolder)) fs.mkdirSync(avatarFolder);
+if (!fs.existsSync(uploadRoot)) {
+  fs.mkdirSync(uploadRoot);
+}
+
+if (!fs.existsSync(avatarFolder)) {
+  fs.mkdirSync(avatarFolder);
+}
 
 /* ---------------------------------------------------
    Static Serving for Uploads
@@ -76,18 +81,31 @@ app.get("/", (req, res) => {
 app.get("/healthz", async (_req, res) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    res.json({ ok: true });
+
+    res.json({
+      ok: true,
+    });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+    });
   }
 });
 
 app.get("/test-db", async (_req, res) => {
   try {
     const count = await prisma.user.count();
-    res.json({ ok: true, users: count });
+
+    res.json({
+      ok: true,
+      users: count,
+    });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    res.status(500).json({
+      ok: false,
+      error: e.message,
+    });
   }
 });
 
@@ -101,14 +119,16 @@ app.use("/api", workerBusinessHoursRoutes);
 app.use("/api", orderRoutes);
 app.use("/api", serviceCatalogRoutes);
 app.use("/api", workerServiceRoutes);
-app.use("/api", searchRoutes); // keep search
+app.use("/api", searchRoutes);
 app.use("/api", ratingRoutes);
+app.use("/api", notificationRoutes);
 app.use("/api", aiRoutes);
 
 /* ---------------------------------------------------
    START SERVER
 --------------------------------------------------- */
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

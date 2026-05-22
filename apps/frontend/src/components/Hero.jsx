@@ -3,8 +3,6 @@
 import { ArrowRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-
-
 export default function Hero() {
   const router = useRouter();
 
@@ -30,7 +28,16 @@ export default function Hero() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
           <button
-            onClick={() => router.push("/signin")}
+            onClick={() => {
+              const token = localStorage.getItem("token");
+              const userId = localStorage.getItem("userId");
+
+              if (token || userId) {
+                router.push("/workers");
+              } else {
+                router.push("/signin");
+              }
+            }}
             className="px-8 py-4 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-all hover:scale-105 flex items-center gap-2"
           >
             Schedule a Pickup
@@ -39,10 +46,16 @@ export default function Hero() {
         </div>
 
         <div className="mt-16 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-3xl mx-auto">
-          <div> <div className="text-3xl mb-2 text-blue-500">24h</div> <p className="text-gray-600 text-sm">Fast turnaround</p> </div> <div>
+          <div>
+            <div className="text-3xl mb-2 text-blue-500">24h</div>
+            <p className="text-gray-600 text-sm">Fast turnaround</p>
+          </div>
+
+          <div>
             <div className="text-3xl mb-2 text-blue-500">100%</div>
             <p className="text-gray-600 text-sm">Satisfaction guaranteed</p>
           </div>
+
           <div>
             <div className="text-3xl mb-2 text-blue-500">Eco</div>
             <p className="text-gray-600 text-sm">Friendly detergents</p>

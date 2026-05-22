@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-
+import ModernDateTimePicker from "@/components/ui/ModernDateTimePicker";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
@@ -466,8 +466,47 @@ export default function BookingPageView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#EBF8FB] flex items-center justify-center">
-        <div className="text-lg">Loading booking…</div>
+      <div className="min-h-screen bg-[#EBF8FB] py-10 px-4">
+        <div className="max-w-6xl mx-auto">
+          <div className="h-12 w-80 mx-auto rounded-full bg-white/70 animate-pulse mb-4" />
+          <div className="h-5 w-96 mx-auto rounded-full bg-white/60 animate-pulse mb-10" />
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <aside className="lg:col-span-4 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 animate-pulse">
+              <div className="h-6 w-28 rounded-full bg-slate-100 mb-6" />
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-full bg-slate-100" />
+                <div>
+                  <div className="h-6 w-40 rounded-full bg-slate-100 mb-3" />
+                  <div className="h-4 w-24 rounded-full bg-slate-100" />
+                </div>
+              </div>
+              <div className="mt-6 h-36 rounded-2xl bg-slate-100" />
+            </aside>
+
+            <main className="lg:col-span-8 bg-white rounded-3xl border border-slate-100 shadow-sm p-8 animate-pulse">
+              <div className="flex items-center gap-6 mb-8">
+                <div className="w-10 h-10 rounded-full bg-slate-100" />
+                <div className="h-5 w-24 rounded-full bg-slate-100" />
+                <div className="flex-1 h-px bg-slate-100" />
+                <div className="w-10 h-10 rounded-full bg-slate-100" />
+                <div className="h-5 w-24 rounded-full bg-slate-100" />
+              </div>
+
+              <div className="border-t border-slate-100 pt-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="h-20 rounded-2xl bg-slate-100" />
+                  <div className="h-20 rounded-2xl bg-slate-100" />
+                </div>
+              </div>
+
+              <div className="mt-10 flex items-center justify-between">
+                <div className="h-12 w-24 rounded-2xl bg-slate-100" />
+                <div className="h-12 w-28 rounded-2xl bg-slate-100" />
+              </div>
+            </main>
+          </div>
+        </div>
       </div>
     );
   }
@@ -592,11 +631,9 @@ export default function BookingPageView() {
                     required
                     error={errors.pickupAt}
                   >
-                    <input
-                      type="datetime-local"
-                      className={inputClass(!!errors.pickupAt)}
+                    <ModernDateTimePicker
                       value={form.pickupAt}
-                      onChange={(e) => setField("pickupAt", e.target.value)}
+                      onChange={(value) => setField("pickupAt", value)}
                     />
                   </Field>
                 </div>

@@ -495,8 +495,27 @@ export function CustomerDashboard({
   // ---------------- LOADING ----------------
   if (loading) {
     return (
-      <div className="p-10 text-center text-slate-500">
-        Loading your dashboard…
+      <div className="min-h-screen bg-gradient-to-br from-[#e0f7fa] via-white to-white">
+        <div className="w-full max-w-7xl mx-auto px-4 py-8">
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-white/70 animate-pulse" />
+
+              <div>
+                <div className="h-5 w-52 bg-white/70 rounded-full animate-pulse mb-3" />
+                <div className="h-4 w-40 bg-white/70 rounded-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="h-28 rounded-2xl bg-white/70 animate-pulse" />
+            <div className="h-28 rounded-2xl bg-white/70 animate-pulse" />
+            <div className="h-28 rounded-2xl bg-white/70 animate-pulse" />
+          </div>
+
+          <div className="h-32 rounded-2xl bg-white/70 animate-pulse mb-8" />
+        </div>
       </div>
     );
   }
@@ -539,7 +558,7 @@ export function CustomerDashboard({
 
             <div>
               <h1 className="text-xl text-slate-800 font-semibold">
-                Welcome back, {customer?.first_name}!
+                Welcome back {customer?.first_name}
               </h1>
               <p className="text-slate-600">Manage your laundry orders</p>
             </div>

@@ -3,15 +3,10 @@ import AboutSection from "@/components/AboutSection";
 import HowItWorks from "@/components/HowItWorks";
 import VisionSection from "@/components/VisionSection";
 import CallToAction from "@/components/CallToAction";
-import CursorClothes from "@/components/CursorClothes";
-
-
 
 export default function HomePage() {
   return (
     <div className="bg-blue-50">
-      
-      <CursorClothes /> 
       <Hero />
       <AboutSection />
       <HowItWorks />
@@ -36,4 +31,3 @@ export default function HomePage() {
     </div>
   );
 }
-

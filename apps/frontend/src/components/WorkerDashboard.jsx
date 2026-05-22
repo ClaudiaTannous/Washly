@@ -370,7 +370,27 @@ export function WorkerDashboard() {
   }
 
   if (loading) {
-    return <div className="p-10 text-center text-slate-500">Loading…</div>;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#e0f7fa] via-white to-white">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="flex justify-between mb-8 flex-wrap gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-xl bg-white/70 animate-pulse" />
+              <div>
+                <div className="h-5 w-48 bg-white/70 rounded-full animate-pulse mb-3" />
+                <div className="h-4 w-64 bg-white/70 rounded-full animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white/80 rounded-2xl shadow-md border border-slate-100 mb-10 p-6 animate-pulse">
+            <div className="h-6 w-40 bg-slate-100 rounded-full mb-4" />
+            <div className="h-4 w-full bg-slate-100 rounded-full mb-2" />
+            <div className="h-4 w-2/3 bg-slate-100 rounded-full" />
+          </div>
+        </div>
+      </div>
+    );
   }
 
   /* ---------------- ORDER CARD ---------------- */
@@ -762,7 +782,7 @@ export function WorkerDashboard() {
         </Tabs>
 
         {/* BUSINESS HOURS + SERVICES */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-10 mb-10">
           {/* BUSINESS HOURS */}
           <Card className="bg-white rounded-2xl shadow-md border border-slate-100">
             <div className="p-6">

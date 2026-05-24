@@ -57,9 +57,19 @@ function formatDisplay(value) {
     minute: "2-digit",
   });
 }
+function toDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
-export default function ModernDateTimePicker({ value, onChange }) {
-  const [open, setOpen] = useState(false);
+  return `${year}-${month}-${day}`;
+}
+
+export default function ModernDateTimePicker({
+  value,
+  onChange,
+  availability = {},
+}) {  const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
 
   const parsedValue = value ? new Date(value) : null;
@@ -155,9 +165,17 @@ export default function ModernDateTimePicker({ value, onChange }) {
   }
 
   function handleDateSelect(date) {
-    setSelectedDate(date);
-    onChange(toLocalDateTimeValue(date, selectedTime));
-  }
+  const dateKey = toDateKey(date);
+  const slots = availability[dateKey] || [];
+
+  if (slots.length === 0) return;
+
+  const firstSlot = slots[0];
+
+  setSelectedDate(date);
+  setSelectedTime(firstSlot);
+  onChange(toLocalDateTimeValue(date, firstSlot));
+}
 
   function handleTimeChange(time) {
     setSelectedTime(time);
@@ -231,21 +249,28 @@ export default function ModernDateTimePicker({ value, onChange }) {
             {calendarDays.map(({ date, currentMonth }) => {
               const selected = isSameDay(date, selectedDate);
               const today = isSameDay(date, new Date());
+              const dateKey = toDateKey(date);
+              const slots = availability[dateKey] || [];
+              const isAvailable = currentMonth && slots.length > 0;
 
               return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
-                  onClick={() => handleDateSelect(date)}
-                  className={`h-10 rounded-full text-sm transition flex items-center justify-center ${
-                    selected
-                      ? "bg-sky-600 text-white font-semibold shadow-sm"
-                      : currentMonth
-                        ? "text-slate-800 hover:bg-sky-50"
-                        : "text-slate-300 hover:bg-slate-50"
-                  } ${today && !selected ? "ring-1 ring-sky-300" : ""}`}
+               <button
+  key={date.toISOString()}
+  type="button"
+  disabled={!isAvailable}
+  onClick={() => handleDateSelect(date)}
+                  className={`relative h-10 rounded-full text-sm transition flex items-center justify-center ${
+  selected
+    ? "bg-sky-600 text-white font-semibold shadow-sm"
+    : isAvailable
+      ? "text-slate-800 hover:bg-sky-50 ring-1 ring-green-300"
+      : "text-slate-300 opacity-40 cursor-not-allowed"
+} ${today && !selected ? "ring-1 ring-sky-300" : ""}`}
                 >
                   {date.getDate()}
+                  {isAvailable && !selected && (
+  <span className="absolute bottom-1 w-1.5 h-1.5 bg-green-500 rounded-full" />
+)}
                 </button>
               );
             })}
@@ -258,12 +283,30 @@ export default function ModernDateTimePicker({ value, onChange }) {
               Pickup time
             </label>
 
-            <input
-              type="time"
-              value={selectedTime}
-              onChange={(e) => handleTimeChange(e.target.value)}
-              className="w-full rounded-xl border border-sky-100 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none focus:border-sky-300"
-            />
+          <div className="grid grid-cols-3 gap-2">
+  {(selectedDate ? availability[toDateKey(selectedDate)] || [] : []).map(
+    (slot) => (
+      <button
+        key={slot}
+        type="button"
+        onClick={() => handleTimeChange(slot)}
+        className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+          selectedTime === slot
+            ? "bg-sky-600 text-white border-sky-600"
+            : "bg-white text-slate-700 border-sky-100 hover:bg-sky-50"
+        }`}
+      >
+        {slot}
+      </button>
+    )
+  )}
+
+  {selectedDate && (availability[toDateKey(selectedDate)] || []).length === 0 && (
+    <div className="col-span-3 text-sm text-slate-500">
+      No available times for this day.
+    </div>
+  )}
+</div>
           </div>
 
           {/* Footer buttons */}

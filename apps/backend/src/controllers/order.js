@@ -148,6 +148,11 @@ exports.createOrder = async (req, res) => {
         error: "Worker not found",
       });
     }
+    console.log("RAW scheduledPickup:", req.body.scheduledPickup);
+console.log("PARSED pickupDate:", pickupDate);
+console.log("DAY:", pickupDate.getDay());
+console.log("TIME:", pickupDate.toTimeString().slice(0, 5));
+console.log("WORKER HOURS:", worker.Hours);
 
     if (!canWorkerTakeOrder(worker, pickupDate)) {
       return res.status(400).json({
@@ -229,17 +234,16 @@ exports.createOrder = async (req, res) => {
             },
           },
         },
-        Notifications: true,
       },
     });
 
-    await createNotification({
-      userId: workerIdBigInt,
-      orderId: order.id,
-      type: "ORDER_RECEIVED",
-      title: "New order received",
-      message: "You received a new laundry order from a customer.",
-    });
+    // await createNotification({
+    //   userId: workerIdBigInt,
+    //   orderId: order.id,
+    //   type: "ORDER_RECEIVED",
+    //   title: "New order received",
+    //   message: "You received a new laundry order from a customer.",
+    // });
 
     return res.status(201).json(order);
   } catch (error) {
@@ -264,7 +268,6 @@ exports.getAllOrders = async (req, res) => {
           },
         },
         Rating: true,
-        Notifications: true,
       },
       orderBy: {
         created_at: "desc",
@@ -306,11 +309,11 @@ exports.getOrderById = async (req, res) => {
         },
         Rating: true,
         PaymentProofs: true,
-        Notifications: {
-          orderBy: {
-            created_at: "desc",
-          },
-        },
+        // Notifications: {
+        //   orderBy: {
+        //     created_at: "desc",
+        //   },
+        // },
       },
     });
 
@@ -506,11 +509,11 @@ exports.getUserOrders = async (req, res) => {
           },
         },
         Rating: true,
-        Notifications: {
-          orderBy: {
-            created_at: "desc",
-          },
-        },
+        // Notifications: {
+        //   orderBy: {
+        //     created_at: "desc",
+        //   },
+        // },
       },
     });
 
@@ -550,11 +553,11 @@ exports.getWorkerOrderHistory = async (req, res) => {
       include: {
         Customer: true,
         Rating: true,
-        Notifications: {
-          orderBy: {
-            created_at: "desc",
-          },
-        },
+        // Notifications: {
+        //   orderBy: {
+        //     created_at: "desc",
+        //   },
+        // },
       },
     });
 

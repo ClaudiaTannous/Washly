@@ -1,4 +1,5 @@
 const prisma = require("../prisma");
+const { canWorkerTakeOrder } = require("../utils/availability");
 
 // =======================
 // CREATE WORKER
@@ -490,6 +491,121 @@ exports.uploadWorkerAvatar = async (req, res) => {
       return res.status(404).json({ error: "Worker not found" });
     }
 
+    return res.status(500).json({ error: error.message });
+  }
+};
+exports.getWorkerAvailability = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month } = req.query; // example: 2026-05
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({ error: "Invalid worker id" });
+    }
+
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: "month is required as YYYY-MM" });
+    }
+
+    const [year, monthNumber] = month.split("-").map(Number);
+
+    const startDate = new Date(year, monthNumber - 1, 1);
+    const endDate = new Date(year, monthNumber, 0, 23, 59, 59, 999);
+
+    const worker = await prisma.worker.findUnique({
+      where: { id: BigInt(id) },
+      include: {
+        Hours: true,
+        Orders: {
+          where: {
+            scheduled_pickup: {
+              gte: startDate,
+              lte: endDate,
+            },
+            status: {
+              in: ["REQUESTED", "CONFIRMED", "IN_PROGRESS"],
+            },
+          },
+        },
+      },
+    });
+
+    if (!worker) {
+      return res.status(404).json({ error: "Worker not found" });
+    }
+
+    if (!worker.is_online) {
+      return res.json({ ok: true, data: {} });
+    }
+
+    const availability = {};
+
+    for (
+      let d = new Date(startDate);
+      d <= endDate;
+      d.setDate(d.getDate() + 1)
+    ) {
+      const dayOfWeek = d.getDay();
+
+      const dayHours = worker.Hours.filter(
+        (h) => Number(h.day_of_week) === dayOfWeek
+      );
+
+      if (dayHours.length === 0) continue;
+
+      const dateKey = d.toISOString().slice(0, 10);
+
+      const ordersForDay = worker.Orders.filter((o) => {
+        const orderDate = new Date(o.scheduled_pickup)
+          .toISOString()
+          .slice(0, 10);
+
+        return orderDate === dateKey;
+      });
+
+      if (ordersForDay.length >= worker.max_orders_per_day) continue;
+
+      availability[dateKey] = [];
+
+      for (const h of dayHours) {
+        const startHour = Number(h.start_hhmm.slice(0, 2));
+        const endHour = Number(h.end_hhmm.slice(0, 2));
+
+        for (let hour = startHour; hour < endHour; hour++) {
+          const slot = `${String(hour).padStart(2, "0")}:00`;
+
+          const alreadyBooked = ordersForDay.some((o) => {
+            const bookedTime = new Date(o.scheduled_pickup)
+              .toTimeString()
+              .slice(0, 5);
+
+            return bookedTime === slot;
+          });
+
+          if (!alreadyBooked) {
+const slotDate = new Date(
+  d.getFullYear(),
+  d.getMonth(),
+  d.getDate(),
+  hour,
+  0,
+  0
+);
+
+if (canWorkerTakeOrder(worker, slotDate)) {
+  availability[dateKey].push(slot);
+}          }
+        }
+      }
+
+      if (availability[dateKey].length === 0) {
+        delete availability[dateKey];
+      }
+    }
+
+    return res.json({ ok: true, data: availability });
+  } catch (error) {
+    console.error("getWorkerAvailability error:", error);
     return res.status(500).json({ error: error.message });
   }
 };

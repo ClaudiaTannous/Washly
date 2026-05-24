@@ -114,6 +114,7 @@ export default function BookingPageView() {
   const [worker, setWorker] = useState(null);
   const [hours, setHours] = useState([]);
   const [fatalError, setFatalError] = useState("");
+  const [availability, setAvailability] = useState({});
 
   const [step, setStep] = useState(1);
 
@@ -205,6 +206,17 @@ export default function BookingPageView() {
 
         setWorker(w);
         setHours(h);
+        const now = new Date();
+const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+const aRes = await fetch(
+  `${API_BASE}/api/workers/${workerId}/availability?month=${month}`
+);
+
+const aJson = aRes.ok ? await aRes.json() : {};
+const availableData = aJson?.data || {};
+
+setAvailability(availableData);
 
         const chosenCity =
           cityFromSearch ||
@@ -423,9 +435,8 @@ export default function BookingPageView() {
             : toNumberOrNull(form.deliveryFloor),
         },
 
-        scheduledPickup: pickupDate.toISOString(),
-        scheduledDropoff: deliveryDate.toISOString(),
-
+scheduledPickup: form.pickupAt,
+scheduledDropoff: deliveryDate.toISOString().slice(0, 16),
         itemsCount: Number(form.itemsCount),
         paymentMethod: form.paymentMethod.toUpperCase(),
 
@@ -631,10 +642,11 @@ export default function BookingPageView() {
                     required
                     error={errors.pickupAt}
                   >
-                    <ModernDateTimePicker
-                      value={form.pickupAt}
-                      onChange={(value) => setField("pickupAt", value)}
-                    />
+                  <ModernDateTimePicker
+  value={form.pickupAt}
+  onChange={(value) => setField("pickupAt", value)}
+  availability={availability}
+/>
                   </Field>
                 </div>
               )}

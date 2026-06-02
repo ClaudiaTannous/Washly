@@ -19,7 +19,6 @@ export default function WorkerDashboardPage() {
       try {
         setLoading(true);
 
-        // 1️⃣ Identify user (source of truth)
         const user = await getCurrentUser();
 
         if (!user?.id) {
@@ -27,16 +26,13 @@ export default function WorkerDashboardPage() {
           return;
         }
 
-        // 2️⃣ Must be a worker
         if (user.role !== "worker") {
           router.replace("/worker/signup");
           return;
         }
 
-        // 3️⃣ Load worker profile (same ID as user)
         const workerData = await getWorker(user.id);
 
-        // 4️⃣ Load worker orders
         const workerOrders = await getWorkerOrders(user.id);
 
         setWorker(workerData);

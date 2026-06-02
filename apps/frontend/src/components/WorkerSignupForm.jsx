@@ -31,7 +31,12 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
         setServiceOptions(data);
 
         const initial = {};
-        data.forEach((svc) => (initial[svc.service_code] = false));
+        data.forEach((svc) => {
+          initial[svc.service_code] = {
+            selected: false,
+            price: formData.pricePerWash || "30",
+          };
+        });
         setSelectedServices(initial);
       } catch (err) {
         console.error("Failed loading services", err);
@@ -59,7 +64,7 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
         ranges: [{ start: "09:00", end: "17:00" }],
       };
       return acc;
-    }, {})
+    }, {}),
   );
 
   // ------------------------------------------------------
@@ -82,7 +87,11 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
   const toggleService = (code) =>
     setSelectedServices((prev) => ({
       ...prev,
-      [code]: !prev[code],
+      [code]: {
+        ...prev[code],
+        selected: !prev[code]?.selected,
+        price: prev[code]?.price || formData.pricePerWash || "30",
+      },
     }));
 
   const isStep1Valid =
@@ -92,7 +101,7 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
     formData.minNoticeMinutes;
 
   const isStep2Valid = () =>
-    Object.values(selectedServices).some((v) => v === true);
+    Object.values(selectedServices).some((v) => v.selected === true);
 
   // ------------------------------------------------------
   // SUBMIT
@@ -107,11 +116,12 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
       return;
     }
 
-    // Build selected services
     const chosenServices = serviceOptions
-      .filter((svc) => selectedServices[svc.service_code])
-      .map((svc) => svc.service_code);
-
+      .filter((svc) => selectedServices[svc.service_code]?.selected)
+      .map((svc) => ({
+        service_code: svc.service_code,
+        base_price: Number(selectedServices[svc.service_code]?.price || 0),
+      }));
     // Worker payload (unchanged)
     const payload = {
       is_professional: formData.isProfessional,
@@ -122,7 +132,7 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
       min_notice_minutes: Number(formData.minNoticeMinutes),
       max_items_per_wash: Number(formData.maxItemsPerWash),
       price_per_wash: Number(formData.pricePerWash),
-      service_codes: chosenServices,
+      services: chosenServices,
     };
 
     try {
@@ -208,8 +218,8 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
                   {step === 1
                     ? "Worker Info"
                     : step === 2
-                    ? "Services"
-                    : "Hours"}
+                      ? "Services"
+                      : "Hours"}
                 </span>
               </div>
 
@@ -354,32 +364,67 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
                 <p className="text-slate-500">Loading services…</p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {serviceOptions.map((svc) => (
-                    <div
-                      key={svc.service_code}
-                      onClick={() => toggleService(svc.service_code)}
-                      className={`flex gap-3 border rounded-xl px-3 py-2 cursor-pointer transition ${
-                        selectedServices[svc.service_code]
-                          ? "bg-[#e0f7fa] border-[#26c6da]"
-                          : "bg-slate-50 hover:bg-slate-100"
-                      }`}
-                    >
-                      {/* Prevent double firing inside checkbox */}
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedServices[svc.service_code]}
-                          onCheckedChange={() => {}}
-                        />
-                      </div>
+                  {serviceOptions.map((svc) => {
+                    const serviceState = selectedServices[svc.service_code];
+                    const isSelected = serviceState?.selected === true;
 
-                      <div className="flex-1">
-                        <p className="text-sm">{svc.display_name}</p>
-                        <p className="text-xs text-slate-500">
-                          {svc.description || `Unit: ${svc.unit}`}
-                        </p>
+                    return (
+                      <div
+                        key={svc.service_code}
+                        onClick={() => toggleService(svc.service_code)}
+                        className={`flex gap-3 border rounded-xl px-3 py-3 cursor-pointer transition ${
+                          isSelected
+                            ? "bg-[#e0f7fa] border-[#26c6da]"
+                            : "bg-slate-50 hover:bg-slate-100"
+                        }`}
+                      >
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => {}}
+                          />
+                        </div>
+
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-800">
+                            {svc.display_name}
+                          </p>
+
+                          <p className="text-xs text-slate-500">
+                            {svc.description || `Unit: ${svc.unit}`}
+                          </p>
+
+                          {isSelected && (
+                            <div
+                              className="mt-3"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Label className="text-xs text-slate-600">
+                                Service price ₪
+                              </Label>
+
+                              <Input
+                                type="number"
+                                min="0"
+                                value={serviceState?.price || ""}
+                                onChange={(e) =>
+                                  setSelectedServices((prev) => ({
+                                    ...prev,
+                                    [svc.service_code]: {
+                                      ...prev[svc.service_code],
+                                      selected: true,
+                                      price: e.target.value,
+                                    },
+                                  }))
+                                }
+                                className="mt-1 h-9 bg-white"
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -472,14 +517,6 @@ export function WorkerSignupForm({ onSwitchToLogin }) {
               {currentStep === 3 ? "Create Worker Account" : "Continue"}
             </Button>
           </div>
-        </div>
-
-        {/* Login Link */}
-        <div className="mt-4 text-center text-slate-600 text-sm">
-          Already a worker?{" "}
-          <button className="text-[#26c6da]" onClick={onSwitchToLogin}>
-            Sign in
-          </button>
         </div>
       </div>
     </div>

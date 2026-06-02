@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import WorkerAvatar from "@/components/WorkerAvatar";
 
 import { Package, Clock, MapPin, Star, User, ArrowLeft } from "lucide-react";
 
@@ -251,19 +252,7 @@ export default function WorkerGuestProfilePage() {
         <div className="mb-8 flex items-center justify-between gap-4 flex-wrap">
           {/* LEFT SIDE: worker info */}
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 flex items-center justify-center">
-              {worker?.image_url ? (
-                <img
-                  src={`${BACKEND_URL}${worker.image_url}`}
-                  alt="Worker avatar"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-2xl font-semibold text-slate-500">
-                  {workerName[0]?.toUpperCase() || "W"}
-                </span>
-              )}
-            </div>
+            <WorkerAvatar workerName={workerName} imageUrl={worker.image_url} />
 
             <div>
               <h1 className="text-2xl font-semibold text-slate-800">
@@ -300,8 +289,8 @@ export default function WorkerGuestProfilePage() {
             <Button
               variant="outline"
               onClick={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                router.push(`/workers?${params.toString()}`);
+                const params = searchParams.toString();
+                router.push(params ? `/workers?${params}` : "/workers");
               }}
               className="rounded-xl border-slate-200 bg-white"
             >

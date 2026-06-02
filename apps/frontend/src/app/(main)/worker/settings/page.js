@@ -8,32 +8,38 @@ import { getCurrentUser, getWorker } from "@/lib/apiClient";
 
 export default function WorkerSettingsPage() {
   const router = useRouter();
-  const [worker, setWorker] = useState(null);
-  const [loading, setLoading] = useState(true);
+
+  const [worker, setWorker] = useState(() => {
+    if (typeof window === "undefined") return null;
+
+    const cached = localStorage.getItem("workerData");
+    return cached ? JSON.parse(cached) : null;
+  });
 
   useEffect(() => {
     async function load() {
       try {
         const user = await getCurrentUser();
+
         if (!user?.id) {
           router.replace("/signin");
           return;
         }
 
         const workerData = await getWorker(user.id);
+
         setWorker(workerData);
+        localStorage.setItem("workerData", JSON.stringify(workerData));
       } catch {
         router.replace("/worker/signup");
-      } finally {
-        setLoading(false);
       }
     }
 
     load();
   }, [router]);
 
-  if (loading) {
-    return <div className="p-10 text-center">Loading…</div>;
+  if (!worker) {
+    return null;
   }
 
   return <WorkerUpdatePage worker={worker} />;

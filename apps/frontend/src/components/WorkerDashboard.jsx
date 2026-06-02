@@ -368,6 +368,45 @@ export function WorkerDashboard() {
       console.error("MARK ALL NOTIFICATIONS READ ERROR:", err);
     }
   }
+  async function handleConfirmBitPayment(orderId) {
+    try {
+      const userId = localStorage.getItem("userId");
+
+      const updatedOrder = await confirmBitPayment(orderId, userId);
+      const finalUpdatedOrder = updatedOrder?.data ?? updatedOrder;
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderId ? { ...order, ...finalUpdatedOrder } : order,
+        ),
+      );
+
+      alert("Payment confirmed");
+    } catch (err) {
+      console.error("CONFIRM BIT PAYMENT ERROR:", err);
+      alert("Could not confirm Bit payment.");
+    }
+  }
+
+  async function handleRejectBitPayment(orderId) {
+    try {
+      const reason = prompt("Why are you rejecting this payment proof?");
+
+      const updatedOrder = await rejectBitPayment(orderId, reason);
+      const finalUpdatedOrder = updatedOrder?.data ?? updatedOrder;
+
+      setOrders((prevOrders) =>
+        prevOrders.map((order) =>
+          order.id === orderId ? { ...order, ...finalUpdatedOrder } : order,
+        ),
+      );
+
+      alert("Payment rejected");
+    } catch (err) {
+      console.error("REJECT BIT PAYMENT ERROR:", err);
+      alert("Could not reject Bit payment.");
+    }
+  }
 
   if (loading) {
     return (
@@ -425,7 +464,32 @@ export function WorkerDashboard() {
           </div>
 
           <div className="font-semibold text-slate-800">₪{order.amount}</div>
+
+          {order.payment_method === "BIT" && (
+            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+              <p className="text-sm font-semibold text-slate-800">
+                Bit Payment
+              </p>
+              <p className="text-sm text-slate-600">
+                Status: {order.payment_status}
+              </p>
+
+              {order.payment_status === "PENDING_VERIFICATION" && (
+                <p className="mt-1 text-xs text-blue-700">
+                  Payment proof uploaded. Open details to review it.
+                </p>
+              )}
+            </div>
+          )}
         </div>
+
+        <Button
+          variant="outline"
+          onClick={() => router.push(`/workers/orders/${order.id}`)}
+          className="mb-3 w-full rounded-xl"
+        >
+          View Details
+        </Button>
 
         {order.status === "REQUESTED" && (
           <div className="space-y-2">
@@ -479,12 +543,6 @@ export function WorkerDashboard() {
           </Button>
         )}
 
-        {order.status === "COMPLETED" && (
-          <Button variant="outline" className="w-full rounded-xl">
-            View Details
-          </Button>
-        )}
-
         {["CANCELLED_BY_WORKER", "CANCELLED_BY_CUSTOMER"].includes(
           order.status,
         ) && (
@@ -535,9 +593,6 @@ export function WorkerDashboard() {
               <h1 className="text-xl font-semibold text-slate-800">
                 Worker Dashboard
               </h1>
-              <p className="text-sm text-slate-500">
-                Manage your orders and customer reviews
-              </p>
             </div>
           </div>
 
@@ -581,7 +636,7 @@ export function WorkerDashboard() {
                     </p>
                   ) : notifications.length === 0 ? (
                     <p className="text-sm text-slate-500">
-                      No notifications yet.
+                      No notifications yet
                     </p>
                   ) : (
                     <div className="max-h-80 space-y-3 overflow-y-auto pr-1">
@@ -676,7 +731,7 @@ export function WorkerDashboard() {
               </p>
             ) : (
               <p className="text-sm text-slate-500 italic">
-                No description provided yet.
+                No description provided yet
               </p>
             )}
           </div>
@@ -841,8 +896,14 @@ export function WorkerDashboard() {
                       key={s.service_code}
                       className="p-4 bg-gradient-to-r from-[#e0f7fa] to-white rounded-xl hover:shadow-md transition-shadow"
                     >
-                      <div className="font-medium text-slate-800">
-                        {s.Service?.display_name}
+                      <div className="flex justify-between items-center">
+                        <div className="font-medium text-slate-800">
+                          {s.Service?.display_name}
+                        </div>
+
+                        <div className="font-semibold text-cyan-700">
+                          ₪{s.base_price}
+                        </div>
                       </div>
 
                       {s.Service?.description && (

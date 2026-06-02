@@ -8,26 +8,28 @@ import { UserSettings } from "@/components/UserSettings";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+
+  const [user, setUser] = useState(() => {
+    if (typeof window === "undefined") return null;
+
+    const cached = localStorage.getItem("currentUser");
+    return cached ? JSON.parse(cached) : null;
+  });
 
   useEffect(() => {
     async function load() {
       try {
         const u = await getCurrentUser();
+
         setUser(u);
+        localStorage.setItem("currentUser", JSON.stringify(u));
       } catch {
         router.replace("/signin");
-      } finally {
-        setLoading(false);
       }
     }
+
     load();
   }, [router]);
-
-  if (loading) {
-    return <div className="p-10 text-center text-slate-500">Loading…</div>;
-  }
 
   if (!user) return null;
 

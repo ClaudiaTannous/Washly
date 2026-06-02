@@ -114,6 +114,8 @@ export default function BookingPageView() {
   const [worker, setWorker] = useState(null);
   const [hours, setHours] = useState([]);
   const [fatalError, setFatalError] = useState("");
+  const [workerServices, setWorkerServices] = useState([]);
+  const [selectedServiceCodes, setSelectedServiceCodes] = useState([]);
 
   const [step, setStep] = useState(1);
 
@@ -135,7 +137,7 @@ export default function BookingPageView() {
     deliveryBuilding: "",
     deliveryApartment: "",
     deliveryFloor: "",
-
+    selectedServices: [],
     paymentMethod: "cash",
     notes: "",
   });
@@ -190,21 +192,35 @@ export default function BookingPageView() {
 
         const wRes = await fetch(`${API_BASE}/api/workers/${workerId}`);
         if (!wRes.ok) throw new Error(await wRes.text());
+
         const wJson = await wRes.json();
         const w = wJson?.data || wJson;
 
         const hRes = await fetch(`${API_BASE}/api/workers/${workerId}/hours`);
         const hJson = hRes.ok ? await hRes.json() : [];
+
         const h = Array.isArray(hJson?.data)
           ? hJson.data
           : Array.isArray(hJson)
             ? hJson
             : [];
 
+        const sRes = await fetch(
+          `${API_BASE}/api/workers/${workerId}/services`,
+        );
+        const sJson = sRes.ok ? await sRes.json() : [];
+
+        const workerServicesData = Array.isArray(sJson?.data)
+          ? sJson.data
+          : Array.isArray(sJson)
+            ? sJson
+            : [];
+
         if (cancelled) return;
 
         setWorker(w);
         setHours(h);
+        setWorkerServices(workerServicesData);
 
         const chosenCity =
           cityFromSearch ||
@@ -212,7 +228,6 @@ export default function BookingPageView() {
           w?.user?.city_name ||
           w?.profile?.city ||
           w?.city ||
-          "" ||
           "";
 
         setForm((prev) => ({
@@ -221,14 +236,16 @@ export default function BookingPageView() {
           deliveryCity: prev.deliveryCity || chosenCity,
         }));
       } catch (e) {
-        if (!cancelled)
+        if (!cancelled) {
           setFatalError(e?.message || "Failed loading booking data");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     if (workerId) load();
+
     return () => {
       cancelled = true;
     };
@@ -276,7 +293,7 @@ export default function BookingPageView() {
       }
     }
 
-    if (stepToValidate === 2) {
+    if (stepToValidate === 3) {
       if (!form.pickupCity) {
         nextErrors.pickupCity = "Pickup city is required";
       }
@@ -305,7 +322,7 @@ export default function BookingPageView() {
       }
     }
 
-    if (stepToValidate === 3) {
+    if (stepToValidate === 4) {
       if (!form.paymentMethod) {
         nextErrors.paymentMethod = "Payment method is required";
       }
@@ -317,7 +334,7 @@ export default function BookingPageView() {
 
   function onNext() {
     if (!validateStep(step)) return;
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(4, s + 1));
   }
 
   function onBack() {
@@ -368,6 +385,11 @@ export default function BookingPageView() {
       setStep(3);
       return;
     }
+    const ok4 = validateStep(4);
+    if (!ok4) {
+      setStep(4);
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -401,6 +423,15 @@ export default function BookingPageView() {
         customerUserId: String(customerUserId),
         workerId: String(workerId),
 
+        // Pricing
+        amount: totalPrice,
+        washPrice,
+        extraServicesPrice,
+        washesCount,
+
+        // Selected services
+        selectedServices: selectedServiceCodes,
+
         pickup: {
           city: form.pickupCity,
           street: form.pickupStreet,
@@ -427,6 +458,7 @@ export default function BookingPageView() {
         scheduledDropoff: deliveryDate.toISOString(),
 
         itemsCount: Number(form.itemsCount),
+
         paymentMethod: form.paymentMethod.toUpperCase(),
 
         notes: form.notes || null,
@@ -463,6 +495,21 @@ export default function BookingPageView() {
       setSubmitting(false);
     }
   }
+  const itemsCountNumber = Number(form.itemsCount || 0);
+  const maxItemsPerWash = Number(worker?.max_items_per_wash || 1);
+  const pricePerWash = Number(worker?.price_per_wash || 0);
+
+  const washesCount =
+    itemsCountNumber > 0 ? Math.ceil(itemsCountNumber / maxItemsPerWash) : 0;
+
+  const washPrice = washesCount * pricePerWash;
+
+  const extraServicesPrice = selectedServiceCodes.reduce((sum, code) => {
+    const service = workerServices.find((s) => s.service_code === code);
+    return sum + Number(service?.base_price || 0);
+  }, 0);
+
+  const totalPrice = washPrice + extraServicesPrice;
 
   if (loading) {
     return (
@@ -564,6 +611,66 @@ export default function BookingPageView() {
 
             <div className="mt-6 bg-slate-50 rounded-2xl border border-slate-100 p-5">
               <div className="font-bold mb-3">Booking summary</div>
+
+              <div className="flex justify-between text-slate-600">
+                <span>Items</span>
+                <span>{form.itemsCount || "—"}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Pickup</span>
+                <span>{form.pickupAt || "—"}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Pickup city</span>
+                <span>{form.pickupCity || "—"}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Washes needed</span>
+                <span>{washesCount}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Price per wash</span>
+                <span>₪{pricePerWash}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Laundry cost</span>
+                <span>₪{washPrice}</span>
+              </div>
+
+              <div className="flex justify-between text-slate-600 mt-2">
+                <span>Extra services</span>
+                <span>₪{extraServicesPrice}</span>
+              </div>
+
+              {selectedServiceCodes.length > 0 && (
+                <div className="mt-3 border-t pt-3">
+                  {selectedServiceCodes.map((code) => {
+                    const service = workerServices.find(
+                      (s) => s.service_code === code,
+                    );
+
+                    return (
+                      <div
+                        key={code}
+                        className="flex justify-between text-sm text-slate-600"
+                      >
+                        <span>{service?.Service?.display_name || code}</span>
+                        <span>₪{service?.base_price || 0}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="flex justify-between font-bold text-lg text-slate-900 border-t pt-3 mt-3">
+                <span>Total</span>
+                <span>₪{totalPrice}</span>
+              </div>
               <div className="flex justify-between text-slate-600">
                 <span>Items</span>
                 <span>{form.itemsCount || "—"}</span>
@@ -638,8 +745,61 @@ export default function BookingPageView() {
                   </Field>
                 </div>
               )}
-
               {step === 2 && (
+                <div className="space-y-4">
+                  <h2 className="text-2xl font-bold">Choose extra services</h2>
+
+                  {workerServices.length === 0 ? (
+                    <p className="text-slate-500">
+                      No extra services available
+                    </p>
+                  ) : (
+                    workerServices.map((service) => {
+                      const checked = selectedServiceCodes.includes(
+                        service.service_code,
+                      );
+
+                      return (
+                        <button
+                          key={service.service_code}
+                          type="button"
+                          onClick={() =>
+                            setSelectedServiceCodes((prev) =>
+                              checked
+                                ? prev.filter((x) => x !== service.service_code)
+                                : [...prev, service.service_code],
+                            )
+                          }
+                          className={`w-full flex justify-between items-center p-4 rounded-2xl border transition ${
+                            checked
+                              ? "border-blue-500 bg-blue-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="text-left">
+                            <div className="font-bold text-slate-800">
+                              {service.Service?.display_name ||
+                                service.service_code}
+                            </div>
+
+                            {service.Service?.description && (
+                              <p className="text-sm text-slate-500 mt-1">
+                                {service.Service.description}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="font-bold text-blue-700">
+                            +₪{service.base_price || 0}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {step === 3 && (
                 <div className="space-y-10">
                   <section>
                     <h2 className="text-2xl font-bold">Pickup address</h2>
@@ -814,7 +974,7 @@ export default function BookingPageView() {
                 </div>
               )}
 
-              {step === 3 && (
+              {step === 4 && (
                 <div className="space-y-6">
                   <Field
                     label="Payment method"
@@ -832,6 +992,13 @@ export default function BookingPageView() {
                       <option value="bit">Bit</option>
                     </select>
                   </Field>
+
+                  {form.paymentMethod === "bit" && (
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
+                      After creating the order, you will be asked to upload a
+                      Bit payment screenshot from your order details page.
+                    </div>
+                  )}
 
                   <Field label="Notes">
                     <textarea
@@ -860,7 +1027,7 @@ export default function BookingPageView() {
                 Back
               </button>
 
-              {step < 3 ? (
+              {step < 4 ? (
                 <button
                   type="button"
                   onClick={onNext}

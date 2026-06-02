@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import BookingPageView from "@/components/BookingPageView";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
 const ISRAEL_CITIES = [
   "Jerusalem",
@@ -37,7 +38,8 @@ async function fetchJson(url, options) {
   const res = await fetch(url, options);
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const msg = data?.error || data?.message || `Request failed (${res.status})`;
+    const msg =
+      data?.error || data?.message || `Request failed (${res.status})`;
     throw new Error(msg);
   }
   return data;
@@ -59,8 +61,20 @@ export default function BookPage() {
   const [form, setForm] = useState({
     itemsCount: "",
     scheduledPickup: "",
-    pickup: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
-    delivery: { city: "", street: "", building: "", apartmentHouse: "", floor: "" },
+    pickup: {
+      city: "",
+      street: "",
+      building: "",
+      apartmentHouse: "",
+      floor: "",
+    },
+    delivery: {
+      city: "",
+      street: "",
+      building: "",
+      apartmentHouse: "",
+      floor: "",
+    },
     paymentMethod: "CASH",
     notes: "",
   });
@@ -78,75 +92,71 @@ export default function BookPage() {
   const [hoursError, setHoursError] = useState("");
 
   // Load provider (use the search endpoint because it returns profile/services)
- useEffect(() => {
-  if (!workerId) return;
+  useEffect(() => {
+    if (!workerId) return;
 
-  const controller = new AbortController();
+    const controller = new AbortController();
 
-  (async () => {
-    try {
-      setProviderErr("");
-      const base = API_BASE.replace(/\/$/, "");
+    (async () => {
+      try {
+        setProviderErr("");
+        const base = API_BASE.replace(/\/$/, "");
 
-      // ✅ correct endpoint for “get worker by id”
-      const data = await fetchJson(`${base}/api/workers/${workerId}`, {
-        credentials: "include",
-        signal: controller.signal,
-      });
+        // ✅ correct endpoint for “get worker by id”
+        const data = await fetchJson(`${base}/api/workers/${workerId}`, {
+          credentials: "include",
+          signal: controller.signal,
+        });
 
-      // handle different shapes safely
-      const worker =
-        data?.data?.worker ||
-        data?.data ||
-        data?.worker ||
-        data;
+        // handle different shapes safely
+        const worker = data?.data?.worker || data?.data || data?.worker || data;
 
-      setProvider(worker);
-    } catch (e) {
-      // ✅ ignore AbortError (Next dev refresh / navigation)
-      if (e?.name === "AbortError" || String(e?.message).includes("aborted")) return;
+        setProvider(worker);
+      } catch (e) {
+        // ✅ ignore AbortError (Next dev refresh / navigation)
+        if (e?.name === "AbortError" || String(e?.message).includes("aborted"))
+          return;
 
-      setProvider(null);
-      setProviderErr(e?.message || "Failed to load provider");
-    }
-  })();
+        setProvider(null);
+        setProviderErr(e?.message || "Failed to load provider");
+      }
+    })();
 
-  return () => controller.abort();
-}, [workerId]);
-
+    return () => controller.abort();
+  }, [workerId]);
 
   // Load worker hours
   useEffect(() => {
-  if (!workerId) return;
+    if (!workerId) return;
 
-  const controller = new AbortController();
+    const controller = new AbortController();
 
-  (async () => {
-    try {
-      setHoursLoading(true);
-      setHoursError("");
-      const base = API_BASE.replace(/\/$/, "");
+    (async () => {
+      try {
+        setHoursLoading(true);
+        setHoursError("");
+        const base = API_BASE.replace(/\/$/, "");
 
-      const data = await fetchJson(`${base}/api/workers/${workerId}/hours`, {
-        credentials: "include",
-        signal: controller.signal,
-      });
+        const data = await fetchJson(`${base}/api/workers/${workerId}/hours`, {
+          credentials: "include",
+          signal: controller.signal,
+        });
 
-      const hours = data?.data || data;
-      setWorkerHours(Array.isArray(hours) ? hours : []);
-    } catch (e) {
-      if (e?.name === "AbortError" || String(e?.message).includes("aborted")) return;
+        const hours = data?.data || data;
+        setWorkerHours(Array.isArray(hours) ? hours : []);
+      } catch (e) {
+        if (e?.name === "AbortError" || String(e?.message).includes("aborted"))
+          return;
 
-      setWorkerHours([]);
-      setHoursError(e?.message || "Failed to load worker hours");
-    } finally {
-      setHoursLoading(false);
-    }
-  })();
+        setWorkerHours([]);
+        setHoursError(e?.message || "Failed to load worker hours");
+      } finally {
+        setHoursLoading(false);
+      }
+    })();
 
-  return () => controller.abort();
-}, [workerId]);
-
+    return () => controller.abort();
+  }, [workerId]);
 
   // Auto-fill pickup/delivery city from ?city=
   useEffect(() => {
@@ -204,26 +214,78 @@ export default function BookPage() {
       }));
     }
   }
+  function validateWorkerRequirements(e) {
+    if (!provider) return;
+
+    const workerCity = provider?.profile?.city?.trim();
+
+    // 1. Customer city must match worker city
+    if (workerCity && form.pickup.city && form.pickup.city !== workerCity) {
+      e["pickup.city"] = `This worker only accepts orders in ${workerCity}`;
+    }
+
+    if (workerCity && form.delivery.city && form.delivery.city !== workerCity) {
+      e["delivery.city"] = `This worker only delivers in ${workerCity}`;
+    }
+
+    // 2. Payment method check
+    const acceptsBit = provider?.profile?.acceptsBit;
+    if (form.paymentMethod === "BIT" && acceptsBit === false) {
+      e["paymentMethod"] = "This worker does not accept Bit payments";
+    }
+
+    // 3. Items limit check
+    const maxItems = provider?.profile?.maxItemsPerOrder;
+    if (maxItems && Number(form.itemsCount) > Number(maxItems)) {
+      e["itemsCount"] = `This worker accepts up to ${maxItems} items`;
+    }
+
+    // 4. Worker hours check
+    if (form.scheduledPickup && workerHours.length > 0) {
+      const selectedDate = new Date(form.scheduledPickup);
+      const selectedDay = selectedDate.toLocaleDateString("en-US", {
+        weekday: "long",
+      });
+
+      const worksThatDay = workerHours.some(
+        (h) => h.dayOfWeek === selectedDay && h.isAvailable !== false,
+      );
+
+      if (!worksThatDay) {
+        e["scheduledPickup"] = `This worker is not available on ${selectedDay}`;
+      }
+    }
+  }
 
   function validateStep(nextStep) {
     const e = {};
 
     if (nextStep >= 1) {
-      if (!String(form.itemsCount || "").trim()) e["itemsCount"] = "Number of items is required";
-      if (!String(form.scheduledPickup || "").trim()) e["scheduledPickup"] = "Pickup date & time is required";
+      if (!String(form.itemsCount || "").trim())
+        e["itemsCount"] = "Number of items is required";
+      if (!String(form.scheduledPickup || "").trim())
+        e["scheduledPickup"] = "Pickup date & time is required";
     }
 
     if (nextStep >= 2) {
-      if (!String(form.pickup.city || "").trim()) e["pickup.city"] = "Pickup city is required";
-      if (!String(form.pickup.street || "").trim()) e["pickup.street"] = "Pickup street is required";
-      if (!String(form.pickup.apartmentHouse || "").trim()) e["pickup.apartmentHouse"] = "Pickup apartment / house is required";
+      if (!String(form.pickup.city || "").trim())
+        e["pickup.city"] = "Pickup city is required";
+      if (!String(form.pickup.street || "").trim())
+        e["pickup.street"] = "Pickup street is required";
+      if (!String(form.pickup.apartmentHouse || "").trim())
+        e["pickup.apartmentHouse"] = "Pickup apartment / house is required";
 
       if (!sameAsPickup) {
-        if (!String(form.delivery.city || "").trim()) e["delivery.city"] = "Delivery city is required";
-        if (!String(form.delivery.street || "").trim()) e["delivery.street"] = "Delivery street is required";
-        if (!String(form.delivery.apartmentHouse || "").trim()) e["delivery.apartmentHouse"] = "Delivery apartment / house is required";
+        if (!String(form.delivery.city || "").trim())
+          e["delivery.city"] = "Delivery city is required";
+        if (!String(form.delivery.street || "").trim())
+          e["delivery.street"] = "Delivery street is required";
+        if (!String(form.delivery.apartmentHouse || "").trim())
+          e["delivery.apartmentHouse"] =
+            "Delivery apartment / house is required";
       }
     }
+    validateWorkerRequirements(e);
 
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -254,20 +316,30 @@ export default function BookPage() {
         pickup: {
           ...form.pickup,
           building: form.pickup.building ? Number(form.pickup.building) : null,
-          apartmentHouse: form.pickup.apartmentHouse ? String(form.pickup.apartmentHouse) : null,
+          apartmentHouse: form.pickup.apartmentHouse
+            ? String(form.pickup.apartmentHouse)
+            : null,
           floor: form.pickup.floor ? Number(form.pickup.floor) : null,
         },
         delivery: sameAsPickup
           ? {
               ...form.pickup,
-              building: form.pickup.building ? Number(form.pickup.building) : null,
-              apartmentHouse: form.pickup.apartmentHouse ? String(form.pickup.apartmentHouse) : null,
+              building: form.pickup.building
+                ? Number(form.pickup.building)
+                : null,
+              apartmentHouse: form.pickup.apartmentHouse
+                ? String(form.pickup.apartmentHouse)
+                : null,
               floor: form.pickup.floor ? Number(form.pickup.floor) : null,
             }
           : {
               ...form.delivery,
-              building: form.delivery.building ? Number(form.delivery.building) : null,
-              apartmentHouse: form.delivery.apartmentHouse ? String(form.delivery.apartmentHouse) : null,
+              building: form.delivery.building
+                ? Number(form.delivery.building)
+                : null,
+              apartmentHouse: form.delivery.apartmentHouse
+                ? String(form.delivery.apartmentHouse)
+                : null,
               floor: form.delivery.floor ? Number(form.delivery.floor) : null,
             },
         paymentMethod: form.paymentMethod,
@@ -294,8 +366,20 @@ export default function BookPage() {
     setForm({
       itemsCount: "",
       scheduledPickup: "",
-      pickup: { city: cityFromSearch || "", street: "", building: "", apartmentHouse: "", floor: "" },
-      delivery: { city: cityFromSearch || "", street: "", building: "", apartmentHouse: "", floor: "" },
+      pickup: {
+        city: cityFromSearch || "",
+        street: "",
+        building: "",
+        apartmentHouse: "",
+        floor: "",
+      },
+      delivery: {
+        city: cityFromSearch || "",
+        street: "",
+        building: "",
+        apartmentHouse: "",
+        floor: "",
+      },
       paymentMethod: "CASH",
       notes: "",
     });

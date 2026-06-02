@@ -360,3 +360,27 @@ export function cancelOrderByWorker(orderId) {
 export function cancelOrderByCustomer(orderId) {
   return updateOrderStatus(orderId, "CANCELLED_BY_CUSTOMER");
 }
+/* -----------------------------------------------------
+   BIT PAYMENTS
+----------------------------------------------------- */
+
+export function confirmBitPayment(orderId, confirmedBy) {
+  return apiFetch(`/api/orders/${orderId}/bit-payment/confirm`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      confirmedBy,
+    }),
+  });
+}
+
+export function rejectBitPayment(orderId, reason) {
+  return apiFetch(`/api/orders/${orderId}/bit-payment/reject`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      reason,
+    }),
+  });
+}
+export function getOrderById(orderId) {
+  return apiFetch(`/api/orders/${orderId}`);
+}

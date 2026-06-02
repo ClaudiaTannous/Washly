@@ -343,6 +343,14 @@ export function CustomerDashboard({
 
     const worker = order.Worker;
     const workerUser = worker?.user;
+    const workerImage =
+      worker?.image_url || worker?.profile?.image_url || workerUser?.image_url;
+
+    const workerImageSrc = workerImage
+      ? workerImage.startsWith("http")
+        ? workerImage
+        : `${API_URL}${workerImage}`
+      : "/default-avatar.png";
 
     return (
       <Card className="bg-white/70 backdrop-blur-xl border-white/20 hover:shadow-lg transition-all duration-300 rounded-2xl">
@@ -351,11 +359,13 @@ export function CustomerDashboard({
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-start gap-3">
               <img
-                src={worker?.image_url || "/default-avatar.png"}
+                src={workerImageSrc}
+                onError={(e) => {
+                  e.currentTarget.src = "/default-avatar.png";
+                }}
                 className="w-12 h-12 rounded-xl object-cover shadow"
                 alt="Worker"
               />
-
               <div>
                 <h3 className="text-slate-800 font-medium">
                   Order #{order.id}
@@ -400,12 +410,12 @@ export function CustomerDashboard({
 
           {/* Actions */}
           <div className="flex gap-2 mt-4">
-            <Button
-              variant="outline"
-              className="flex-1 rounded-xl border-slate-300 hover:bg-white/70"
+            <button
+              onClick={() => router.push(`/customer/orders/${order.id}`)}
+              className="w-full rounded-2xl border px-4 py-3"
             >
               View Details
-            </Button>
+            </button>
 
             {order.status === "COMPLETED" && !order.Rating && (
               <Button
@@ -560,7 +570,6 @@ export function CustomerDashboard({
               <h1 className="text-xl text-slate-800 font-semibold">
                 Welcome back {customer?.first_name}
               </h1>
-              <p className="text-slate-600">Manage your laundry orders</p>
             </div>
           </div>
 
@@ -603,7 +612,7 @@ export function CustomerDashboard({
                     </p>
                   ) : notifications.length === 0 ? (
                     <p className="text-sm text-slate-500">
-                      No notifications yet.
+                      No notifications yet
                     </p>
                   ) : (
                     <div className="max-h-80 space-y-3 overflow-y-auto pr-1">

@@ -18,48 +18,47 @@ export default function AboutSection() {
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center mb-20">
           <div className="order-2 md:order-1">
             <div className="inline-block mb-6 px-6 py-2 rounded-full bg-blue-50 border border-blue-100 shadow-sm">
-  <h3 className="text-2xl md:text-3xl text-blue-700">
-    Who We Are
-  </h3>
-</div>
+              <h3 className="text-2xl md:text-3xl text-blue-700">Who We Are</h3>
+            </div>
 
             <p className="text-gray-600 leading-relaxed mb-4">
-              Washly started with a simple idea: laundry doesn't have to be a chore.
-              We're a team of innovators who believe your time is valuable, and we're
-              here to give it back to you.
+              Washly started with a simple idea: laundry doesn't have to be a
+              chore. We're a team of innovators who believe your time is
+              valuable, and we're here to give it back to you.
             </p>
             <p className="text-gray-600 leading-relaxed">
-              Using the same technology that transformed food delivery, we've built
-              a seamless service that picks up your dirty laundry and returns it
-              fresh, clean, and perfectly folded — all without you lifting a finger.
+              Using the same technology that transformed food delivery, we've
+              built a seamless service that picks up your dirty laundry and
+              returns it fresh, clean, and perfectly folded all without you
+              lifting a finger.
             </p>
           </div>
 
           <div className="order-1 md:order-2">
             <img
-  src="/Image1.png"
-  alt="Washly delivery handover"
-  className="w-full h-64 md:h-96 object-cover object-top rounded-2xl shadow-lg"
-/>
+              src="/Image1.png"
+              alt="Washly delivery handover"
+              className="w-full h-64 md:h-96 object-cover object-top rounded-2xl shadow-lg"
+            />
           </div>
         </div>
 
         {/* Section 2 - Right Aligned */}
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center mb-20">
           <div>
-           <img
-  src="Image2.png"
-  alt="Washly pickup at customer door"
-  className="w-full h-64 md:h-96 object-cover rounded-2xl shadow-lg"
-/>
+            <img
+              src="Image2.png"
+              alt="Washly pickup at customer door"
+              className="w-full h-64 md:h-96 object-cover rounded-2xl shadow-lg"
+            />
           </div>
 
           <div>
             <div className="inline-block mb-6 px-6 py-2 rounded-full bg-cyan-50 border border-cyan-100 shadow-sm">
-  <h3 className="text-2xl md:text-3xl text-green-700">
-    Why Washly is Special
-  </h3>
-</div>
+              <h3 className="text-2xl md:text-3xl text-green-700">
+                Why Washly is Special
+              </h3>
+            </div>
 
             <p className="text-gray-600 leading-relaxed mb-4">
               Unlike traditional dry cleaners or laundromats, we come to you.
@@ -69,7 +68,8 @@ export default function AboutSection() {
             <p className="text-gray-600 leading-relaxed">
               Every load is washed separately, ensuring your clothes get the
               individual attention they deserve. Track your order in real-time,
-              communicate directly with your driver, and enjoy transparent pricing.
+              communicate directly with your driver, and enjoy transparent
+              pricing.
             </p>
           </div>
         </div>
@@ -78,10 +78,10 @@ export default function AboutSection() {
         <div className="grid md:grid-cols-2 gap-12 md:gap-20 items-center">
           <div className="order-2 md:order-1">
             <div className="inline-block mb-6 px-6 py-2 rounded-full bg-purple-50 border border-purple-100 shadow-sm">
-  <h3 className="text-2xl md:text-3xl text-purple-700">
-    What Sets Us Apart
-  </h3>
-</div>
+              <h3 className="text-2xl md:text-3xl text-purple-700">
+                What Sets Us Apart
+              </h3>
+            </div>
 
             <p className="text-gray-600 leading-relaxed mb-4">
               We're not just washing clothes — we're building trust. Our quality
@@ -89,17 +89,18 @@ export default function AboutSection() {
               items for free or issue a full refund.
             </p>
             <p className="text-gray-600 leading-relaxed">
-              With flexible scheduling, same-day service options, and subscription
-              plans that save you money, Washly fits seamlessly into your lifestyle.
+              With flexible scheduling, same-day service options, and
+              subscription plans that save you money, Washly fits seamlessly
+              into your lifestyle.
             </p>
           </div>
 
           <div className="order-1 md:order-2">
-           <img
-  src="/Image3.png"
-  alt="Washly delivery handover"
-  className="w-full h-64 md:h-96 object-cover object-top rounded-2xl shadow-lg"
-/>
+            <img
+              src="/Image3.png"
+              alt="Washly delivery handover"
+              className="w-full h-64 md:h-96 object-cover object-top rounded-2xl shadow-lg"
+            />
           </div>
         </div>
       </div>

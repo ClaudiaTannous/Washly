@@ -62,6 +62,7 @@ function buildAlternativePickupTimes(originalPickupAt) {
 export default function WorkersSearchPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
 
   const cityMenuRef = useRef(null);
 
@@ -74,8 +75,10 @@ export default function WorkersSearchPage() {
   const [servicesError, setServicesError] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [cityMenuOpen, setCityMenuOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentWorkerId, setCurrentWorkerId] = useState(null);
 
-  const [submittedFilters, setSubmittedFilters] = useState(null);
+  const [submittedFilters, setSubmittedFilters] = useState({});
   const [items, setItems] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -155,6 +158,18 @@ export default function WorkersSearchPage() {
         });
         if (!res.ok) return;
         const user = await res.json();
+        setCurrentUser(user);
+        if (user?.WorkerProfile?.id) {
+          setCurrentWorkerId(user.WorkerProfile.id);
+        }
+
+        if (user?.worker?.id) {
+          setCurrentWorkerId(user.worker.id);
+        }
+
+        if (user?.worker_id) {
+          setCurrentWorkerId(user.worker_id);
+        }
         if (user?.city_name) setCity(user.city_name);
       } catch (_) {}
     }
@@ -192,12 +207,17 @@ export default function WorkersSearchPage() {
     };
   }, []);
 
-  // Sort items by rating descending
-  const sortedItems = useMemo(
-    () =>
-      [...items].sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0)),
-    [items],
-  );
+  const sortedItems = useMemo(() => {
+    return [...items]
+      .filter((worker) => {
+        if (!currentWorkerId) return true;
+        return String(worker.worker_id) !== String(currentWorkerId);
+      })
+      .sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0));
+    console.log("currentUser:", currentUser);
+    console.log("currentWorkerId:", currentWorkerId);
+    console.log("workers:", items);
+  }, [items, currentWorkerId]);
 
   const isCityValid = city.trim().length > 0;
 
@@ -207,10 +227,9 @@ export default function WorkersSearchPage() {
     return f;
   }
 
-  // Auto-load when city is set
   useEffect(() => {
     if (!city.trim()) {
-      setSubmittedFilters(null);
+      setSubmittedFilters({});
       setItems([]);
       setNextCursor(null);
       setError(null);
@@ -221,7 +240,10 @@ export default function WorkersSearchPage() {
       return;
     }
 
-    // Clear old city results immediately so old "no providers" UI does not flash
+    const cityFromUrl = searchParams.get("city");
+
+    if (cityFromUrl) return;
+
     setItems([]);
     setNextCursor(null);
     setError(null);
@@ -231,7 +253,7 @@ export default function WorkersSearchPage() {
     setAlternativeTimeMatches([]);
 
     setSubmittedFilters({ city: city.trim() });
-  }, [city]);
+  }, [city, searchParams]);
 
   const onSearch = () => {
     if (!isCityValid) return;
@@ -305,7 +327,19 @@ export default function WorkersSearchPage() {
             const relaxed = { ...submittedFilters };
             delete relaxed.pickup_at;
             const relaxedData = await fetchWorkers(relaxed);
-            setSameCityWorkers(relaxedData.items || []);
+            setSameCityWorkers(
+              (relaxedData.items || []).filter((worker) => {
+                if (!currentUser?.id) return true;
+
+                const workerUserId =
+                  worker.user_id ||
+                  worker.userId ||
+                  worker.user?.id ||
+                  worker.User?.id;
+
+                return String(workerUserId) !== String(currentUser.id);
+              }),
+            );
             if (submittedFilters.pickup_at) {
               setAlternativeTimeMatches(
                 await fetchAlternativeTimeMatches(submittedFilters),
@@ -490,12 +524,7 @@ export default function WorkersSearchPage() {
           </div>
         )}
 
-        {/* ── Worker list ── */}
-        {!submittedFilters ? (
-          <div className="text-center text-slate-400 text-sm py-20">
-            Choose a city to see available providers.
-          </div>
-        ) : sortedItems.length > 0 ? (
+        {sortedItems.length > 0 ? (
           <div className="flex flex-col gap-4">
             {sortedItems.map((worker, i) => (
               <WorkerCard
@@ -503,16 +532,11 @@ export default function WorkersSearchPage() {
                 worker={worker}
                 rank={i + 1}
                 selectedCity={city}
+                showServicePrices={true}
                 onOpenDetails={(w) => {
                   const params = new URLSearchParams();
 
-                  params.set("city", city);
-
-                  if (pickupAt) {
-                    params.set("pickup_at", new Date(pickupAt).toISOString());
-                  }
-
-                  Object.entries(advancedFilters || {}).forEach(
+                  Object.entries(submittedFilters || {}).forEach(
                     ([key, value]) => {
                       if (value === undefined || value === null || value === "")
                         return;
@@ -528,7 +552,11 @@ export default function WorkersSearchPage() {
                     },
                   );
 
-                  router.push(`/workers/${w.worker_id}?${params.toString()}`);
+                  router.push(
+                    params.toString()
+                      ? `/workers/${w.worker_id}?${params.toString()}`
+                      : `/workers/${w.worker_id}`,
+                  );
                 }}
               />
             ))}
@@ -679,26 +707,6 @@ export default function WorkersSearchPage() {
               )}
             </div>
           )
-        )}
-
-        {/* ── Load more ── */}
-        {submittedFilters && !firstLoad && (
-          <div className="flex justify-center mt-8">
-            {nextCursor ? (
-              <button
-                type="button"
-                onClick={() => load(false)}
-                disabled={loading}
-                className="px-7 py-2 rounded-full border border-sky-200 bg-white text-sky-700 text-sm font-semibold hover:bg-sky-50 disabled:opacity-50"
-              >
-                {loading ? "Loading..." : "Load more"}
-              </button>
-            ) : (
-              sortedItems.length > 0 && (
-                <p className="text-sm text-slate-400">All providers loaded</p>
-              )
-            )}
-          </div>
         )}
       </div>
     </div>

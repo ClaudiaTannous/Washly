@@ -1,9 +1,8 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-
+import { Eye, EyeOff } from "lucide-react";
 export default function AuthPage() {
-
   const router = useRouter();
 
   useEffect(() => {
@@ -18,12 +17,13 @@ export default function AuthPage() {
     }
   }, []);
 
-
   const [isLogin, setIsLogin] = useState(true);
 
   // === LOGIN STATES ===
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
 
   // === SIGNUP STATES ===
@@ -151,16 +151,15 @@ export default function AuthPage() {
       <div className="relative w-[850px] h-[480px] rounded-2xl overflow-hidden washly-glow">
         {/* STEADY LOGO */}
         <img
-         src="/washly-logo (3).png"
-         alt="Washly Logo"
-         className="
+          src="/washly-logo (3).png"
+          alt="Washly Logo"
+          className="
          absolute top-0 left-0
          -translate-y-6
          w-32 h-32
          z-50
          "
-
-         />
+        />
 
         {/* Sliding Panel Background */}
         <div
@@ -190,12 +189,26 @@ export default function AuthPage() {
           />
 
           <label className="text-sm">Password</label>
-          <input
-            type="password"
-            value={loginPassword}
-            onChange={(e) => setLoginPassword(e.target.value)}
-            className="w-full mb-2 mt-1 bg-transparent border-b border-gray-300 py-2 focus:outline-none"
-          />
+          <div className="relative mb-2 mt-1">
+            <input
+              type={showLoginPassword ? "text" : "password"}
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              className="w-full bg-transparent border-b border-gray-300 py-2 pr-10 focus:outline-none"
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowLoginPassword(!showLoginPassword)}
+              className="absolute right-0 top-2 text-gray-300 hover:text-white"
+            >
+              {showLoginPassword ? (
+                <EyeOff size={18} />
+              ) : (
+                <Eye size={18} />
+              )}{" "}
+            </button>
+          </div>
 
           {/* LOGIN ERROR DISPLAY */}
           {loginError && (
@@ -235,7 +248,7 @@ export default function AuthPage() {
           <h1 className="text-4xl font-extrabold">
             WELCOME
             <br />
-            TO WASHLY!
+            TO WASHLY
           </h1>
           <p className="mt-4 text-sm w-64">
             We're happy to see you. Please log into your Washly account.
@@ -318,12 +331,23 @@ export default function AuthPage() {
 
           {/* PASSWORD */}
           <label className="text-sm">Password</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full mb-6 mt-1 bg-transparent border-b border-gray-300 py-2 focus:outline-none"
-          />
+
+          <div className="relative mb-6 mt-1">
+            <input
+              type={showSignupPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-transparent border-b border-gray-300 py-2 pr-10 focus:outline-none"
+            />
+
+            <button
+              type="button"
+              onClick={() => setShowSignupPassword(!showSignupPassword)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-white transition"
+            >
+              {showSignupPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
 
           {signupError && <p className="text-red-400 text-sm">{signupError}</p>}
           {signupSuccess && (

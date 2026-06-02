@@ -26,6 +26,7 @@ import {
   addWorkerBusinessHoursBulk,
   getWorkerServices,
   createWorkerService,
+  updateWorkerService,
   deleteWorkerService,
   getServiceCatalog,
 } from "../lib/apiClient";
@@ -61,6 +62,7 @@ export default function WorkerUpdatePage({ worker }) {
   const [services, setServices] = useState([]);
   const [selectedServices, setSelectedServices] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [servicePrices, setServicePrices] = useState({});
 
   /* ---------- LOAD DATA ---------- */
   useEffect(() => {
@@ -74,6 +76,12 @@ export default function WorkerUpdatePage({ worker }) {
 
       setSelectedServices(s.map((x) => x.service_code));
 
+      const prices = {};
+      s.forEach((item) => {
+        prices[item.service_code] = item.base_price || 0;
+      });
+
+      setServicePrices(prices);
       setServices(
         catalogList.map((s) => ({
           // ← use catalogList, not catalog
@@ -86,15 +94,6 @@ export default function WorkerUpdatePage({ worker }) {
         (h || []).map((x) => ({
           ...x,
           original_start_hhmm: x.start_hhmm,
-        })),
-      );
-
-      setSelectedServices(s.map((x) => x.service_code));
-
-      setServices(
-        catalog.map((s) => ({
-          service_code: s.service_code,
-          label: s.display_name, // Prisma field
         })),
       );
     }
@@ -186,7 +185,11 @@ export default function WorkerUpdatePage({ worker }) {
         if (!existingCodes.includes(code)) {
           await createWorkerService(worker.id, {
             service_code: code,
-            base_price: form.price_per_wash,
+            base_price: servicePrices[code] || 0,
+          });
+        } else {
+          await updateWorkerService(worker.id, code, {
+            base_price: servicePrices[code] || 0,
           });
         }
       }
@@ -374,27 +377,46 @@ export default function WorkerUpdatePage({ worker }) {
 
             {services.map((s) => {
               const enabled = selectedServices.includes(s.service_code);
+
               return (
                 <div
                   key={s.service_code}
-                  className={`flex justify-between items-center p-4 rounded-xl border transition
-                  ${
+                  className={`flex justify-between items-center p-4 rounded-xl border transition ${
                     enabled
                       ? "bg-gradient-to-r from-cyan-500 to-cyan-600 text-white border-cyan-500 shadow"
                       : "bg-slate-50 text-slate-500 border-slate-300"
                   }`}
                 >
                   <span>{s.label}</span>
-                  <Switch
-                    checked={enabled}
-                    onCheckedChange={(v) =>
-                      setSelectedServices((p) =>
-                        v
-                          ? [...p, s.service_code]
-                          : p.filter((x) => x !== s.service_code),
-                      )
-                    }
-                  />
+
+                  <div className="flex items-center gap-3">
+                    {enabled && (
+                      <Input
+                        type="number"
+                        min="0"
+                        value={servicePrices[s.service_code] || ""}
+                        onChange={(e) =>
+                          setServicePrices((prev) => ({
+                            ...prev,
+                            [s.service_code]: Number(e.target.value),
+                          }))
+                        }
+                        className="w-24 bg-white text-black border-2 border-slate-300 rounded-lg"
+                        placeholder="₪"
+                      />
+                    )}
+
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(v) =>
+                        setSelectedServices((p) =>
+                          v
+                            ? [...p, s.service_code]
+                            : p.filter((x) => x !== s.service_code),
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               );
             })}

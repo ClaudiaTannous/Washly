@@ -14,7 +14,6 @@ import { Droplets } from "lucide-react";
 import { createWorker, getServiceCatalog } from "../lib/apiClient";
 
 export default function WorkerSignupPage({ onSignupComplete }) {
-  // NEW: load services from backend
   const [serviceOptions, setServiceOptions] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(true);
 
@@ -22,16 +21,12 @@ export default function WorkerSignupPage({ onSignupComplete }) {
     async function loadServices() {
       try {
         const services = await getServiceCatalog();
-        // services is an array of:
-        // { service_code, display_name, unit, default_proximate_turnaround_hours, description, delicate_fabric }
         setServiceOptions(services);
 
-        // initialise selection state: all false
         const initial = {};
         services.forEach((svc) => {
           initial[svc.service_code] = false;
         });
-        // Example: mark basic wash as default selected if exists
         if (initial["WASH_BASIC"] !== undefined) {
           initial["WASH_BASIC"] = true;
         }
@@ -52,7 +47,7 @@ export default function WorkerSignupPage({ onSignupComplete }) {
   const [pickupAvailable, setPickupAvailable] = useState(true);
   const [deliveryAvailable, setDeliveryAvailable] = useState(true);
   const [description, setDescription] = useState(
-    "I provide reliable home laundry services."
+    "I provide reliable home laundry services.",
   );
   const [pricePerWash, setPricePerWash] = useState("30");
   const [maxOrdersPerDay, setMaxOrdersPerDay] = useState("5");
@@ -107,7 +102,7 @@ export default function WorkerSignupPage({ onSignupComplete }) {
     } catch (err) {
       console.error(err);
       setError(
-        err?.message || "Failed to complete worker signup. Please try again."
+        err?.message || "Failed to complete worker signup. Please try again.",
       );
     } finally {
       setIsSubmitting(false);

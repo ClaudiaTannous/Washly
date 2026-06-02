@@ -19,6 +19,8 @@ exports.createWorker = async (req, res) => {
       min_notice_minutes,
       max_items_per_wash,
       price_per_wash,
+      service_codes,
+      services,
     } = req.body;
 
     // 1) check that user exists
@@ -63,9 +65,34 @@ exports.createWorker = async (req, res) => {
       data.price_per_wash = price_per_wash;
 
     const newWorker = await prisma.worker.create({
-      data,
+      data: {
+        ...data,
+        Services:
+          Array.isArray(services) && services.length > 0
+            ? {
+                create: services.map((service) => ({
+                  service_code: service.service_code,
+                  base_price: Number(service.base_price || 0),
+                  is_active: true,
+                })),
+              }
+            : Array.isArray(service_codes) && service_codes.length > 0
+              ? {
+                  create: service_codes.map((code) => ({
+                    service_code: code,
+                    base_price: Number(price_per_wash || 0),
+                    is_active: true,
+                  })),
+                }
+              : undefined,
+      },
       include: {
         user: true,
+        Services: {
+          include: {
+            Service: true,
+          },
+        },
       },
     });
 
@@ -188,14 +215,14 @@ exports.getWorkerById = async (req, res) => {
     }
 
     const worker = await prisma.worker.findUnique({
-  where: { id: BigInt(req.params.id) },
-  include: { user: true }, // ✅ needed for name/city/street/phone
-});
+      where: { id: BigInt(req.params.id) },
+      include: { user: true }, // ✅ needed for name/city/street/phone
+    });
 
-if (!worker) return res.status(404).json({ ok: false, error: "Worker not found" });
+    if (!worker)
+      return res.status(404).json({ ok: false, error: "Worker not found" });
 
-return res.json({ ok: true, data: worker }); // wrapping is fine now (frontend unwraps)
-
+    return res.json({ ok: true, data: worker }); // wrapping is fine now (frontend unwraps)
 
     return res.json(worker);
   } catch (error) {

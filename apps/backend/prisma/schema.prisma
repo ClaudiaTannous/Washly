@@ -7,45 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//
-// ========= ENUMS =========
-//
-
-enum OrderStatus {
-  REQUESTED          // customer placed request
-  CONFIRMED          // worker accepted
-  IN_PROGRESS        // worker started washing
-  COMPLETED          // delivered and finished
-  CANCELLED_BY_WORKER
-  CANCELLED_BY_CUSTOMER
-}
-
-enum PaymentMethod {
-  CASH
-  BIT
-}
-
-enum PaymentStatus {
-  UNPAID               // default for new orders
-  PENDING_VERIFICATION // proof uploaded, waiting for worker
-  PAID                 // worker confirmed payment
-}
-
-enum NotificationType {
-  ORDER_RECEIVED
-  ORDER_ACCEPTED
-  ORDER_REJECTED
-  ORDER_STATUS_UPDATED
-  PAYMENT_UPDATED
-  ORDER_COMPLETED
-  ORDER_CANCELLED
-  GENERAL
-}
-
-//
-// ========= MODELS =========
-//
-
 model User {
   id                     BigInt              @id @default(autoincrement())
   email                  String              @unique
@@ -62,37 +23,33 @@ model User {
   description            String?
   created_at             DateTime            @default(now())
   updated_at             DateTime            @default(now())
-
+  Notifications          Notification[]      @relation("UserNotifications")
   OrdersAsCustomer       Order[]             @relation("orders_as_customer")
+  PaymentProofsUploaded  OrderPaymentProof[] @relation("OrderPaymentProof_User")
   RatingsAuthored        Rating[]            @relation("rating_rater")
   Worker                 Worker?
-  PaymentProofsUploaded  OrderPaymentProof[] @relation("OrderPaymentProof_User")
-  Notifications          Notification[]      @relation("UserNotifications")
 
   @@index([email])
 }
 
 model Worker {
-  id                  BigInt                @id
-  is_professional     Boolean               @default(false)
-  pickup_available    Boolean               @default(false)
-  delivery_available  Boolean               @default(false)
-  description         String?
-  is_online           Boolean               @default(true)
-  max_orders_per_day  Int                   @default(5)
-  min_notice_minutes  Int                   @default(120)
-
-  // pricing & capacity per wash
-  max_items_per_wash  Int                   @default(10)
-  price_per_wash      Int                   @default(30)
-
-  image_url           String?
-  Orders              Order[]               @relation("orders_as_worker")
-  RatingsReceived     Rating[]              @relation("rating_worker")
-  user                User                  @relation(fields: [id], references: [id], onDelete: Cascade)
-  Hours               WorkerBusinessHours[] @relation("WorkerHours")
-  Services            WorkerService[]
-  AIConversations     AIConversation[]
+  id                 BigInt                @id
+  is_professional    Boolean               @default(false)
+  pickup_available   Boolean               @default(false)
+  delivery_available Boolean               @default(false)
+  description        String?
+  image_url          String?
+  is_online          Boolean               @default(true)
+  max_orders_per_day Int                   @default(5)
+  min_notice_minutes Int                   @default(120)
+  max_items_per_wash Int                   @default(10)
+  price_per_wash     Int                   @default(30)
+  AIConversations    AIConversation?
+  Orders             Order[]               @relation("orders_as_worker")
+  RatingsReceived    Rating[]              @relation("rating_worker")
+  user               User                  @relation(fields: [id], references: [id], onDelete: Cascade)
+  Hours              WorkerBusinessHours[] @relation("WorkerHours")
+  Services           WorkerService[]
 }
 
 model WorkerBusinessHours {
@@ -100,7 +57,6 @@ model WorkerBusinessHours {
   day_of_week Int
   start_hhmm  String
   end_hhmm    String
-
   Worker      Worker @relation("WorkerHours", fields: [worker_id], references: [id], onDelete: Cascade)
 
   @@id([worker_id, day_of_week, start_hhmm])
@@ -115,18 +71,18 @@ model ServiceCatalog {
   delicate_fabric                    Boolean         @default(false)
 
   WorkerServices                     WorkerService[]
+  OrderServices                      OrderService[]
 }
 
 model WorkerService {
   worker_id                  BigInt
   service_code               String
   is_active                  Boolean        @default(true)
-  base_price                 Int            @default(0)
   min_qty                    Decimal?
   max_qty                    Decimal?
   turnaround_proximate_hours Int?
   notes                      String?
-
+  base_price                 Int            @default(0)
   Service                    ServiceCatalog @relation(fields: [service_code], references: [service_code])
   Worker                     Worker         @relation(fields: [worker_id], references: [id], onDelete: Cascade)
 
@@ -134,11 +90,9 @@ model WorkerService {
 }
 
 model Order {
-  id                       BigInt        @id @default(autoincrement())
+  id                       BigInt              @id @default(autoincrement())
   customer_user_id         BigInt
   worker_id                BigInt
-
-  status                   OrderStatus   @default(REQUESTED)
 
   pickup_city              String
   pickup_street            String
@@ -155,25 +109,29 @@ model Order {
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
 
-  items_count              Int           @default(0)
-  washes_count             Int           @default(0)
+  created_at               DateTime            @default(now())
+  updated_at               DateTime            @default(now())
 
-  payment_method           PaymentMethod @default(CASH)
-  payment_status           PaymentStatus @default(UNPAID)
+  amount                   Int                 @default(0)
+  items_count              Int                 @default(0)
+  washes_count             Int                 @default(0)
+  notes                    String?
+
+  payment_method           PaymentMethod       @default(CASH)
+  payment_status           PaymentStatus       @default(UNPAID)
   payment_confirmed_at     DateTime?
   payment_confirmed_by     BigInt?
   payment_notes            String?
 
-  created_at               DateTime      @default(now())
-  updated_at               DateTime      @default(now())
-  amount                   Int           @default(0)
-  notes                    String?
+  status                   OrderStatus         @default(REQUESTED)
 
-  Customer                 User          @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
-  Worker                   Worker        @relation("orders_as_worker", fields: [worker_id], references: [id])
-  Rating                   Rating?
-  PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
+  Customer                 User                @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
+  Worker                   Worker              @relation("orders_as_worker", fields: [worker_id], references: [id])
+
+  Services                 OrderService[]
   Notifications            Notification[]      @relation("OrderNotifications")
+  PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
+  Rating                   Rating?
 
   @@index([customer_user_id])
   @@index([worker_id])
@@ -182,28 +140,21 @@ model Order {
 }
 
 model AIConversation {
-  id         BigInt      @id @default(autoincrement())
-  worker_id  BigInt
-
-  Worker     Worker      @relation(fields: [worker_id], references: [id], onDelete: Cascade)
-  messages   AIMessage[]
+  id        BigInt      @id @default(autoincrement())
+  worker_id BigInt      @unique
+  Worker    Worker      @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+  messages  AIMessage[]
 
   @@index([worker_id])
-  @@unique([worker_id])
-}
-
-enum AIMessageRole {
-  USER
-  AI
 }
 
 model AIMessage {
-  id              BigInt          @id @default(autoincrement())
-  conversationId  BigInt
-  conversation    AIConversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  role            AIMessageRole
-  content         String
-  createdAt       DateTime        @default(now())
+  id             BigInt         @id @default(autoincrement())
+  conversationId BigInt
+  role           AIMessageRole
+  content        String
+  createdAt      DateTime       @default(now())
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId])
 }
@@ -216,7 +167,6 @@ model Rating {
   score        Int
   comment      String?
   created_at   DateTime      @default(now())
-
   Order        Order         @relation(fields: [order_id], references: [id], onDelete: Cascade)
   Worker       Worker        @relation("rating_worker", fields: [rated_worker], references: [id], onDelete: Cascade)
   Rater        User          @relation("rating_rater", fields: [rater_id], references: [id], onDelete: Cascade)
@@ -224,49 +174,90 @@ model Rating {
 }
 
 model RatingPhoto {
-  id        BigInt     @id @default(autoincrement())
+  id        BigInt  @id @default(autoincrement())
   rating_id BigInt
   media_id  BigInt
-  is_cover  Boolean    @default(false)
-
-  Rating    Rating     @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  is_cover  Boolean @default(false)
+  Rating    Rating  @relation(fields: [rating_id], references: [id], onDelete: Cascade)
 
   @@index([rating_id])
 }
 
 model OrderPaymentProof {
-  id          BigInt     @id @default(autoincrement())
+  id          BigInt   @id @default(autoincrement())
   order_id    BigInt
-  media_id    BigInt
+  image_url   String
   uploaded_by BigInt
-  created_at  DateTime   @default(now())
+  created_at  DateTime @default(now())
 
-  Order        Order      @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
-  Uploader     User       @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
+  Order       Order    @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
+  Uploader    User     @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
 
   @@index([order_id])
 }
 
 model Notification {
-  id          BigInt           @id @default(autoincrement())
-
-  user_id     BigInt
-  order_id    BigInt?
-
-  type        NotificationType
-  title       String
-  message     String
-
-  is_read     Boolean          @default(false)
-  created_at  DateTime         @default(now())
-  read_at     DateTime?
-
-  User        User             @relation("UserNotifications", fields: [user_id], references: [id], onDelete: Cascade)
-  Order       Order?           @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: Cascade)
+  id         BigInt           @id @default(autoincrement())
+  user_id    BigInt
+  order_id   BigInt?
+  type       NotificationType
+  title      String
+  message    String
+  is_read    Boolean          @default(false)
+  created_at DateTime         @default(now())
+  read_at    DateTime?
+  Order      Order?           @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: Cascade)
+  User       User             @relation("UserNotifications", fields: [user_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([order_id])
   @@index([type])
   @@index([is_read])
   @@index([created_at])
+}
+
+enum OrderStatus {
+  REQUESTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_WORKER
+  CANCELLED_BY_CUSTOMER
+}
+
+enum PaymentMethod {
+  CASH
+  BIT
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING_VERIFICATION
+  PAID
+}
+
+enum NotificationType {
+  ORDER_RECEIVED
+  ORDER_ACCEPTED
+  ORDER_REJECTED
+  ORDER_STATUS_UPDATED
+  PAYMENT_UPDATED
+  ORDER_COMPLETED
+  ORDER_CANCELLED
+  GENERAL
+}
+
+enum AIMessageRole {
+  USER
+  AI
+}
+model OrderService {
+  order_id     BigInt
+  service_code String
+  price        Int
+
+  Order   Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  Service ServiceCatalog @relation(fields: [service_code], references: [service_code])
+
+  @@id([order_id, service_code])
 }

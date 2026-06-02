@@ -78,10 +78,6 @@ router.get("/search/workers", async (req, res) => {
       worker_id,
     } = req.query;
 
-    if (!city || String(city).trim() === "") {
-      return res.status(400).json({ ok: false, error: "city is required" });
-    }
-
     const hasPickupAt =
       pickup_at !== undefined && String(pickup_at).trim() !== "";
 
@@ -137,7 +133,15 @@ router.get("/search/workers", async (req, res) => {
         : {}),
 
       user: {
-        city_name: { equals: String(city).trim(), mode: "insensitive" },
+        ...(city && String(city).trim() !== ""
+          ? {
+              city_name: {
+                equals: String(city).trim(),
+                mode: "insensitive",
+              },
+            }
+          : {}),
+
         ...(q
           ? {
               OR: [
@@ -268,11 +272,17 @@ router.get("/search/workers", async (req, res) => {
 
         return {
           worker_id: w.id.toString(),
+
           is_online: w.is_online,
           pickup_available: w.pickup_available,
           delivery_available: w.delivery_available,
           is_professional: w.is_professional,
           image_url: w.image_url,
+
+          // ADD THESE
+          price_per_wash: w.price_per_wash,
+          max_items_per_wash: w.max_items_per_wash,
+          max_orders_per_day: w.max_orders_per_day,
 
           profile: {
             name: `${w.user.first_name} ${w.user.last_name}`,

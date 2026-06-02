@@ -167,13 +167,35 @@ exports.createOrder = async (req, res) => {
         : 30;
 
     const washesCount = Math.ceil(itemsCount / maxItemsPerWash);
-    const totalAmount = washesCount * pricePerWash;
+
+    const selectedServices = Array.isArray(body.selectedServices)
+      ? body.selectedServices
+      : [];
+
+    const workerServices = await prisma.workerService.findMany({
+      where: {
+        worker_id: workerIdBigInt,
+        service_code: {
+          in: selectedServices,
+        },
+        is_active: true,
+      },
+    });
+
+    const extraServicesPrice = workerServices.reduce(
+      (sum, service) => sum + Number(service.base_price || 0),
+      0,
+    );
+
+    const totalAmount = washesCount * pricePerWash + extraServicesPrice;
 
     let status = "REQUESTED";
 
     if (body.status && ORDER_STATUSES.includes(body.status)) {
       status = body.status;
     }
+
+    const paymentStatus = "UNPAID";
 
     const order = await prisma.order.create({
       data: {
@@ -202,8 +224,15 @@ exports.createOrder = async (req, res) => {
         items_count: itemsCount,
         washes_count: washesCount,
         amount: totalAmount,
+        Services: {
+          create: workerServices.map((service) => ({
+            service_code: service.service_code,
+            price: service.base_price,
+          })),
+        },
 
         payment_method: body.paymentMethod,
+        payment_status: paymentStatus,
         payment_notes: body.paymentNotes || null,
 
         notes: body.notes || null,
@@ -218,6 +247,11 @@ exports.createOrder = async (req, res) => {
             city_name: true,
           },
         },
+        Services: {
+          include: {
+            Service: true,
+          },
+        },
         Worker: {
           include: {
             user: {
@@ -229,6 +263,7 @@ exports.createOrder = async (req, res) => {
             },
           },
         },
+        PaymentProofs: true,
         Notifications: true,
       },
     });
@@ -256,18 +291,19 @@ exports.createOrder = async (req, res) => {
 exports.getAllOrders = async (req, res) => {
   try {
     const orders = await prisma.order.findMany({
-      include: {
-        Customer: true,
-        Worker: {
-          include: {
-            user: true,
-          },
-        },
-        Rating: true,
-        Notifications: true,
-      },
+      where,
       orderBy: {
         created_at: "desc",
+      },
+      include: {
+        Customer: true,
+        Rating: true,
+        PaymentProofs: true,
+        Notifications: {
+          orderBy: {
+            created_at: "desc",
+          },
+        },
       },
     });
 
@@ -564,5 +600,227 @@ exports.getWorkerOrderHistory = async (req, res) => {
     return res.status(500).json({
       error: error.message,
     });
+  }
+};
+
+// ---------------------------
+// UPLOAD BIT PAYMENT PROOF
+// ---------------------------
+exports.uploadBitProof = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { uploadedBy } = req.body;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ error: "Invalid order id format" });
+    }
+
+    if (!uploadedBy) {
+      return res.status(400).json({ error: "uploadedBy is required" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "Payment proof image is required" });
+    }
+
+    const orderId = BigInt(id);
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        customer_user_id: true,
+        worker_id: true,
+        payment_method: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (order.payment_method !== "BIT") {
+      return res.status(400).json({
+        error: "Payment proof can only be uploaded for Bit payments",
+      });
+    }
+
+    const imageUrl = `/uploads/payment-proofs/${req.file.filename}`;
+
+    await prisma.orderPaymentProof.create({
+      data: {
+        order_id: orderId,
+        image_url: imageUrl,
+        uploaded_by: BigInt(uploadedBy),
+      },
+    });
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        payment_status: "PENDING_VERIFICATION",
+        updated_at: new Date(),
+      },
+      include: {
+        Customer: true,
+        Worker: {
+          include: {
+            user: true,
+          },
+        },
+        PaymentProofs: true,
+      },
+    });
+
+    await createNotification({
+      userId: order.worker_id,
+      orderId: order.id,
+      type: "PAYMENT_UPDATED",
+      title: "Bit payment proof uploaded",
+      message: "The customer uploaded a Bit payment confirmation screenshot.",
+    });
+
+    return res.status(201).json(updatedOrder);
+  } catch (error) {
+    console.error("Upload Bit Proof Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ---------------------------
+// CONFIRM BIT PAYMENT
+// ---------------------------
+exports.confirmBitPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmedBy } = req.body;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ error: "Invalid order id format" });
+    }
+
+    if (!confirmedBy) {
+      return res.status(400).json({ error: "confirmedBy is required" });
+    }
+
+    const orderId = BigInt(id);
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        customer_user_id: true,
+        worker_id: true,
+        payment_method: true,
+      },
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (existingOrder.payment_method !== "BIT") {
+      return res.status(400).json({
+        error: "Only Bit payments can be confirmed here",
+      });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        payment_status: "PAID",
+        payment_confirmed_at: new Date(),
+        payment_confirmed_by: BigInt(confirmedBy),
+        updated_at: new Date(),
+      },
+      include: {
+        Customer: true,
+        Worker: {
+          include: {
+            user: true,
+          },
+        },
+        PaymentProofs: true,
+      },
+    });
+
+    await createNotification({
+      userId: existingOrder.customer_user_id,
+      orderId: existingOrder.id,
+      type: "PAYMENT_UPDATED",
+      title: "Payment confirmed",
+      message: "Your Bit payment was confirmed by the worker.",
+    });
+
+    return res.json(updatedOrder);
+  } catch (error) {
+    console.error("Confirm Bit Payment Error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// ---------------------------
+// REJECT BIT PAYMENT
+// ---------------------------
+exports.rejectBitPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!/^\d+$/.test(String(id))) {
+      return res.status(400).json({ error: "Invalid order id format" });
+    }
+
+    const orderId = BigInt(id);
+
+    const existingOrder = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        customer_user_id: true,
+        payment_method: true,
+      },
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    if (existingOrder.payment_method !== "BIT") {
+      return res.status(400).json({
+        error: "Only Bit payments can be rejected here",
+      });
+    }
+
+    const updatedOrder = await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        payment_status: "REJECTED",
+        payment_notes: reason || "Bit payment proof was rejected.",
+        updated_at: new Date(),
+      },
+      include: {
+        Customer: true,
+        Worker: {
+          include: {
+            user: true,
+          },
+        },
+        PaymentProofs: true,
+      },
+    });
+
+    await createNotification({
+      userId: existingOrder.customer_user_id,
+      orderId: existingOrder.id,
+      type: "PAYMENT_UPDATED",
+      title: "Bit payment rejected",
+      message: reason || "Your Bit payment proof was rejected.",
+    });
+
+    return res.json(updatedOrder);
+  } catch (error) {
+    console.error("Reject Bit Payment Error:", error);
+    return res.status(500).json({ error: error.message });
   }
 };

@@ -13,6 +13,7 @@ const {
   setWorkerOnlineStatus,
   getWorkers,
   uploadWorkerAvatar,
+  getWorkerAvailability,
 } = require("../controllers/worker");
 
 const { getWorkerOrderHistory } = require("../controllers/order");
@@ -41,6 +42,8 @@ const upload = multer({ storage });
 
 // ✔ Public: Get list of workers
 router.get("/workers", getWorkers);
+
+router.get("/workers/:id/availability", getWorkerAvailability);
 
 // ✔ Public: Get worker by ID
 router.get("/workers/:id", getWorkerById);

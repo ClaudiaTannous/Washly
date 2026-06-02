@@ -42,7 +42,7 @@ function canWorkerTakeOrder(worker, pickupDate) {
     (h) =>
       h.day_of_week === jsDay &&
       h.start_hhmm <= pickupHHMM &&
-      h.end_hhmm >= pickupHHMM
+      h.end_hhmm > pickupHHMM
   );
 
   return match;

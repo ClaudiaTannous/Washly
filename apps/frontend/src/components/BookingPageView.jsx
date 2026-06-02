@@ -454,9 +454,8 @@ export default function BookingPageView() {
             : toNumberOrNull(form.deliveryFloor),
         },
 
-        scheduledPickup: pickupDate.toISOString(),
-        scheduledDropoff: deliveryDate.toISOString(),
-
+        scheduledPickup: form.pickupAt,
+        scheduledDropoff: deliveryDate.toISOString().slice(0, 16),
         itemsCount: Number(form.itemsCount),
 
         paymentMethod: form.paymentMethod.toUpperCase(),
@@ -741,6 +740,7 @@ export default function BookingPageView() {
                     <ModernDateTimePicker
                       value={form.pickupAt}
                       onChange={(value) => setField("pickupAt", value)}
+                      availability={availability}
                     />
                   </Field>
                 </div>

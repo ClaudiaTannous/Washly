@@ -3,6 +3,7 @@ import AboutSection from "@/components/AboutSection";
 import HowItWorks from "@/components/HowItWorks";
 import VisionSection from "@/components/VisionSection";
 import CallToAction from "@/components/CallToAction";
+import FAQ from "@/components/FAQ";
 
 export default function HomePage() {
   return (
@@ -11,6 +12,7 @@ export default function HomePage() {
       <AboutSection />
       <HowItWorks />
       <VisionSection />
+      <FAQ />
       <CallToAction />
 
       {/* Footer */}

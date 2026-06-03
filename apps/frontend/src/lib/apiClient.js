@@ -384,3 +384,6 @@ export function rejectBitPayment(orderId, reason) {
 export function getOrderById(orderId) {
   return apiFetch(`/api/orders/${orderId}`);
 }
+export function searchWorkers(queryString) {
+  return apiFetch(`/api/search/workers?${queryString}`);
+}

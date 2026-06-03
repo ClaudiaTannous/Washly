@@ -157,6 +157,7 @@ export function RatingSection({ stats, reviews }) {
 ----------------------------------------------------- */
 function ReviewCard({ review }) {
   const [helpful, setHelpful] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
 
   function timeAgo(date) {
     const d = new Date(date);
@@ -168,64 +169,112 @@ function ReviewCard({ review }) {
     return `${Math.floor(diff / 30)} months ago`;
   }
 
+  const photos = review.photos || [];
+
   return (
-    <div className="p-4 border border-slate-100 rounded-xl hover:shadow-md transition">
-      <div className="flex gap-4">
-        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4dd0e1] to-[#26c6da] text-white flex items-center justify-center font-semibold">
-          {review.customer_avatar ? (
-            <img
-              src={review.customer_avatar}
-              alt=""
-              className="w-full h-full rounded-full object-cover"
-            />
-          ) : (
-            review.customer_name.charAt(0)
-          )}
-        </div>
-
-        <div className="flex-1">
-          <div className="flex justify-between mb-1">
-            <div>
-              <p className="font-semibold text-slate-800">
-                {review.customer_name}
-              </p>
-              <p className="text-sm text-slate-500">{timeAgo(review.date)}</p>
-            </div>
-
-            {review.service_type && (
-              <Badge variant="secondary">{review.service_type}</Badge>
+    <>
+      <div className="p-4 border border-slate-100 rounded-xl hover:shadow-md transition">
+        <div className="flex gap-4">
+          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#4dd0e1] to-[#26c6da] text-white flex items-center justify-center font-semibold">
+            {review.customer_avatar ? (
+              <img
+                src={review.customer_avatar}
+                alt=""
+                className="w-full h-full rounded-full object-cover"
+              />
+            ) : (
+              review.customer_name.charAt(0)
             )}
           </div>
 
-          <div className="flex gap-1 mb-2">
-            {[1, 2, 3, 4, 5].map((s) => (
-              <Star
-                key={s}
-                className={`w-4 h-4 ${
-                  s <= review.rating
-                    ? "fill-yellow-400 text-yellow-400"
-                    : "text-slate-300"
+          <div className="flex-1">
+            <div className="flex justify-between mb-1">
+              <div>
+                <p className="font-semibold text-slate-800">
+                  {review.customer_name}
+                </p>
+                <p className="text-sm text-slate-500">{timeAgo(review.date)}</p>
+              </div>
+
+              {review.service_type && (
+                <Badge variant="secondary">{review.service_type}</Badge>
+              )}
+            </div>
+
+            <div className="flex gap-1 mb-2">
+              {[1, 2, 3, 4, 5].map((s) => (
+                <Star
+                  key={s}
+                  className={`w-4 h-4 ${
+                    s <= review.rating
+                      ? "fill-yellow-400 text-yellow-400"
+                      : "text-slate-300"
+                  }`}
+                />
+              ))}
+            </div>
+
+            <p className="text-slate-700 mb-3">{review.comment}</p>
+
+            {photos.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {photos.map((photo) => {
+                  const src =
+                    photo.full_image_url ||
+                    (photo.image_url?.startsWith("http")
+                      ? photo.image_url
+                      : `http://localhost:5000${photo.image_url}`);
+
+                  return (
+                    <button
+                      key={photo.id}
+                      type="button"
+                      onClick={() => setSelectedPhoto(src)}
+                    >
+                      <img
+                        src={src}
+                        alt="Review photo"
+                        className="h-16 w-16 rounded-xl border object-cover hover:opacity-80 transition"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setHelpful(!helpful)}
+            >
+              <ThumbsUp
+                className={`w-4 h-4 mr-1 ${
+                  helpful ? "fill-current text-[#26c6da]" : ""
                 }`}
               />
-            ))}
+              Helpful ({(review.helpful_count || 0) + (helpful ? 1 : 0)})
+            </Button>
           </div>
-
-          <p className="text-slate-700 mb-3">{review.comment}</p>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setHelpful(!helpful)}
-          >
-            <ThumbsUp
-              className={`w-4 h-4 mr-1 ${
-                helpful ? "fill-current text-[#26c6da]" : ""
-              }`}
-            />
-            Helpful ({(review.helpful_count || 0) + (helpful ? 1 : 0)})
-          </Button>
         </div>
       </div>
-    </div>
+
+      {selectedPhoto && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 p-4">
+          <button
+            type="button"
+            onClick={() => setSelectedPhoto(null)}
+            className="absolute right-5 top-5 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-800"
+          >
+            Close
+          </button>
+
+          <img
+            src={selectedPhoto}
+            alt="Large review photo"
+            className="max-h-[85vh] max-w-[90vw] rounded-2xl object-contain shadow-2xl"
+          />
+        </div>
+      )}
+    </>
   );
 }

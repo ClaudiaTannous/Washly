@@ -740,7 +740,6 @@ export default function BookingPageView() {
                     <ModernDateTimePicker
                       value={form.pickupAt}
                       onChange={(value) => setField("pickupAt", value)}
-                      availability={availability}
                     />
                   </Field>
                 </div>

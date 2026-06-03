@@ -6,6 +6,7 @@ import {
   Clock,
   ShieldCheck,
   Truck,
+  Mail,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -46,7 +47,7 @@ export default function Hero() {
   return (
     <section className="pt-32 pb-20 px-6 bg-gradient-to-br from-[#e0f7fa] via-white to-[#f8feff]">
       <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
-        {/* LEFT */}
+        {/* LEFT SIDE */}
         <div>
           <span className="inline-flex mb-6 px-4 py-2 bg-cyan-100 text-cyan-700 rounded-full text-sm font-medium">
             Laundry pickup & delivery near you
@@ -63,6 +64,7 @@ export default function Hero() {
             order, and get your clothes washed, folded, and delivered back.
           </p>
 
+          {/* CTA Buttons */}
           <div className="mt-8 flex flex-col sm:flex-row gap-4">
             <button
               onClick={handleFindWorkers}
@@ -80,6 +82,22 @@ export default function Hero() {
             </button>
           </div>
 
+          {/* Support */}
+          <div className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-full bg-white px-4 py-3 border border-slate-200 shadow-sm">
+            <Mail className="w-4 h-4 text-[#26c6da]" />
+            <span className="text-sm text-slate-600">
+              Need help? Contact us at
+            </span>
+
+            <a
+              href="mailto:support@washly.com"
+              className="text-sm font-semibold text-[#26c6da] hover:underline"
+            >
+              support@washly.com
+            </a>
+          </div>
+
+          {/* Features */}
           <div className="mt-8 flex flex-wrap gap-5 text-sm text-slate-600">
             <span className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#26c6da]" />
@@ -98,12 +116,13 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* RIGHT */}
+        {/* RIGHT SIDE */}
         <div className="relative">
           <div className="rounded-[2rem] bg-white p-6 shadow-2xl border border-cyan-100">
             <div className="rounded-[1.5rem] bg-gradient-to-br from-cyan-100 to-blue-50 p-6">
               <div className="rounded-3xl bg-white p-5 shadow-sm mb-4">
                 <p className="text-sm text-slate-500">Next pickup</p>
+
                 <p className="text-2xl font-bold text-slate-900">
                   Today, 18:30
                 </p>
@@ -111,12 +130,15 @@ export default function Hero() {
 
               <div className="grid grid-cols-2 gap-4">
                 <FeatureBox icon={Clock} title="24h" text="Fast turnaround" />
+
                 <FeatureBox
                   icon={CheckCircle}
                   title="100%"
                   text="Easy booking"
                 />
+
                 <FeatureBox icon={Truck} title="Pickup" text="From your door" />
+
                 <FeatureBox
                   icon={ShieldCheck}
                   title="Trusted"
@@ -128,6 +150,7 @@ export default function Hero() {
 
           <div className="absolute -bottom-6 -left-6 hidden md:block rounded-2xl bg-white px-5 py-4 shadow-xl border border-slate-100">
             <p className="text-sm text-slate-500">Order status</p>
+
             <p className="font-bold text-slate-900">Laundry in progress</p>
           </div>
         </div>
@@ -140,7 +163,9 @@ function FeatureBox({ icon: Icon, title, text }) {
   return (
     <div className="rounded-2xl bg-white p-4 shadow-sm">
       <Icon className="mb-3 h-6 w-6 text-[#26c6da]" />
+
       <p className="font-bold text-slate-900">{title}</p>
+
       <p className="text-sm text-slate-500">{text}</p>
     </div>
   );

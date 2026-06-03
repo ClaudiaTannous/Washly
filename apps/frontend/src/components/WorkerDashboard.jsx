@@ -205,6 +205,7 @@ export function WorkerDashboard() {
             rating: r.score,
             comment: r.comment || "No comment",
             date: r.created_at,
+            photos: r.Photos || [],
           })),
         );
 

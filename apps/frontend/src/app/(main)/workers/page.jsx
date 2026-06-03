@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import SearchFilters from "@/components/ui/SearchFilters";
 import WorkerCard from "@/components/ui/WorkerCard";
 import ModernDateTimePicker from "@/components/ui/ModernDateTimePicker";
+import { searchWorkers } from "@/lib/apiClient";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
@@ -22,12 +23,12 @@ async function fetchWorkers(filters, cursor) {
   if (cursor) params.set("cursor", cursor);
   if (!params.has("limit")) params.set("limit", "50");
 
-  const res = await fetch(
-    `${API_BASE}/api/search/workers?${params.toString()}`,
-  );
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok)
-    throw new Error(json?.error || `HTTP ${res.status}`);
+  const json = await searchWorkers(params.toString());
+
+  if (!json?.ok) {
+    throw new Error(json?.error || "Search failed");
+  }
+
   return json.data;
 }
 
@@ -65,7 +66,7 @@ export default function WorkersSearchPage() {
   const searchParamsString = searchParams.toString();
 
   const cityMenuRef = useRef(null);
-
+  const [showCityModal, setShowCityModal] = useState(false);
   const [city, setCity] = useState("");
   const [pickupAt, setPickupAt] = useState("");
   const [cities, setCities] = useState([]);
@@ -144,7 +145,7 @@ export default function WorkersSearchPage() {
 
     setSubmittedFilters(filters);
     setFirstLoad(true);
-  }, []);
+  }, [searchParamsString]);
 
   // Load logged-in user's city as default
   useEffect(() => {
@@ -256,15 +257,40 @@ export default function WorkersSearchPage() {
   }, [city, searchParams]);
 
   const onSearch = () => {
-    if (!isCityValid) return;
-    setSubmittedFilters(buildFilters());
+    if (!isCityValid) {
+      setShowCityModal(true);
+      return;
+    }
+
+    const filters = buildFilters();
+    setSubmittedFilters(filters);
     setFiltersOpen(false);
+
+    const params = new URLSearchParams();
+
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value === undefined || value === null || value === "") return;
+
+      if (key === "service_codes" && Array.isArray(value)) {
+        if (value.length) params.set("service_codes", value.join(","));
+        return;
+      }
+
+      params.set(key, String(value));
+    });
+
+    router.replace(`/workers?${params.toString()}`);
   };
 
   const onReset = () => {
     setPickupAt("");
     setAdvancedFilters({});
-    if (city.trim()) setSubmittedFilters({ city: city.trim() });
+
+    if (city.trim()) {
+      const filters = { city: city.trim() };
+      setSubmittedFilters(filters);
+      router.replace(`/workers?city=${encodeURIComponent(city.trim())}`);
+    }
   };
 
   async function fetchAlternativeTimeMatches(filters) {
@@ -423,15 +449,21 @@ export default function WorkersSearchPage() {
                         key={c}
                         type="button"
                         onClick={() => {
+                          const filters = { city: c };
+
                           setCity(c);
-                          setCityMenuOpen(false);
+                          setSubmittedFilters(filters);
+                          setItems([]);
+                          setNextCursor(null);
+                          setError(null);
+                          setFirstLoad(true);
+                          setNoWorkersInCity(false);
+                          setSameCityWorkers([]);
+                          setAlternativeTimeMatches([]);
 
-                          const params = new URLSearchParams(
-                            searchParams.toString(),
+                          router.replace(
+                            `/workers?city=${encodeURIComponent(c)}`,
                           );
-                          params.set("city", c);
-
-                          router.replace(`/workers?${params.toString()}`);
                         }}
                         className={`w-full text-left px-4 py-2.5 rounded-xl text-sm transition ${
                           city === c
@@ -484,10 +516,6 @@ export default function WorkersSearchPage() {
           </button>
         </div>
 
-        {citiesError && (
-          <p className="text-xs text-red-500 mb-2">{citiesError}</p>
-        )}
-
         {/* ── Filter panel ── */}
         {filtersOpen && (
           <div className="bg-white/95 border border-sky-100 rounded-[28px] px-6 py-5 mb-6 shadow-sm">
@@ -508,8 +536,7 @@ export default function WorkersSearchPage() {
               <button
                 type="button"
                 onClick={onSearch}
-                disabled={!isCityValid}
-                className="px-6 py-2 rounded-full bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700 disabled:opacity-50"
+                className="px-6 py-2 rounded-full bg-sky-600 text-white text-sm font-semibold hover:bg-sky-700"
               >
                 Apply filters
               </button>
@@ -643,7 +670,7 @@ export default function WorkersSearchPage() {
                       Other providers in {city}
                     </div>
                     <p className="text-sm text-slate-500 mt-1">
-                      These providers are nearby, but not at your selected time.
+                      These providers are nearby, but not at your selected time
                     </p>
                   </div>
                   <div className="flex flex-col gap-4">
@@ -707,6 +734,42 @@ export default function WorkersSearchPage() {
               )}
             </div>
           )
+        )}
+        {showCityModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4">
+              <div className="flex justify-center mb-4">
+                <div className="w-16 h-16 rounded-full bg-sky-100 flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-sky-600"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                  >
+                    <path d="M12 21s-7-7.75-7-13a7 7 0 1114 0c0 5.25-7 13-7 13z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                </div>
+              </div>
+
+              <h3 className="text-xl font-bold text-center text-slate-900 mb-2">
+                Choose a City
+              </h3>
+
+              <p className="text-center text-slate-600 mb-6">
+                Please choose a city before applying filters.
+              </p>
+
+              <button
+                type="button"
+                onClick={() => setShowCityModal(false)}
+                className="w-full py-3 rounded-2xl bg-sky-600 text-white font-semibold hover:bg-sky-700 transition"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

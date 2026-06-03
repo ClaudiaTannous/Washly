@@ -137,6 +137,15 @@ export default function WorkerGuestProfilePage() {
             rating: r.score,
             comment: r.comment || "No comment",
             date: r.created_at,
+
+            photos: (r.Photos || []).map((photo) => ({
+              id: photo.id,
+              image_url: photo.full_image_url
+                ? photo.full_image_url
+                : photo.image_url?.startsWith("http")
+                  ? photo.image_url
+                  : `${BACKEND_URL}${photo.image_url}`,
+            })),
           })),
         );
 
@@ -288,10 +297,7 @@ export default function WorkerGuestProfilePage() {
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
-              onClick={() => {
-                const params = searchParams.toString();
-                router.push(params ? `/workers?${params}` : "/workers");
-              }}
+              onClick={() => router.back()}
               className="rounded-xl border-slate-200 bg-white"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />

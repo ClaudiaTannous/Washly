@@ -87,6 +87,7 @@ export function CustomerDashboard({
   const [reviewOrderId, setReviewOrderId] = useState(null);
   const [reviewScore, setReviewScore] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
+  const [reviewPhotos, setReviewPhotos] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewSuccessPopup, setReviewSuccessPopup] = useState(false);
 
@@ -253,17 +254,20 @@ export function CustomerDashboard({
     try {
       setSubmittingReview(true);
 
+      const formData = new FormData();
+
+      formData.append("orderId", orderId);
+      formData.append("score", Number(reviewScore));
+      formData.append("comment", reviewComment);
+
+      reviewPhotos.forEach((photo) => {
+        formData.append("photos", photo);
+      });
+
       const res = await fetch(`${API_URL}/api/ratings`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         credentials: "include",
-        body: JSON.stringify({
-          orderId,
-          score: Number(reviewScore),
-          comment: reviewComment,
-        }),
+        body: formData,
       });
 
       let data = {};
@@ -294,6 +298,7 @@ export function CustomerDashboard({
       setReviewOrderId(null);
       setReviewScore(5);
       setReviewComment("");
+      setReviewPhotos([]);
 
       setReviewSuccessPopup(true);
 
@@ -471,6 +476,17 @@ export function CustomerDashboard({
                 onChange={(e) => setReviewComment(e.target.value)}
                 placeholder="Write your experience..."
                 className="mb-3 min-h-24 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-800"
+              />
+              <label className="mb-1 block text-sm text-slate-600">
+                Photos (optional)
+              </label>
+
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => setReviewPhotos(Array.from(e.target.files))}
+                className="mb-3 w-full rounded-lg border border-slate-300 bg-white p-2"
               />
 
               <div className="flex gap-2">

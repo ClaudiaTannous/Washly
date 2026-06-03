@@ -1,50 +1,60 @@
 "use client";
 
-import { Smartphone, Package, Sparkles, Truck } from "lucide-react";
+import {
+  Search,
+  CalendarCheck,
+  Handshake,
+  CreditCard,
+  Star,
+} from "lucide-react";
 
 export default function HowItWorks() {
   const steps = [
     {
-      icon: Smartphone,
-      title: "Schedule a Pickup",
+      icon: Search,
+      title: "Find a Laundry Helper",
       description:
-        "Choose a time that works for you through our app or website. Pick a slot as soon as today or plan ahead for the week.",
+        "Search workers by city, service type, availability, price per wash, and ratings.",
     },
     {
-      icon: Package,
-      title: "We Pick Up Your Laundry",
+      icon: CalendarCheck,
+      title: "Book Your Laundry Order",
       description:
-        "Our friendly driver arrives at your door, collects your dirty clothes in eco-friendly bags, and heads to our facility.",
+        "Choose pickup and delivery details, select the number of washes, and confirm your order.",
     },
     {
-      icon: Sparkles,
-      title: "Professional Cleaning",
+      icon: Handshake,
+      title: "Pickup and Service",
       description:
-        "Your clothes are washed with premium detergents, dried, and folded with care. Special items? We handle those too.",
+        "The worker collects your laundry, completes the selected washing services, and updates the order status.",
     },
     {
-      icon: Truck,
-      title: "Fresh Delivery",
+      icon: CreditCard,
+      title: "Pay and Confirm",
       description:
-        "Within 24 hours, your clean, fresh laundry is delivered right back to your doorstep. It is that simple.",
+        "Pay with cash or Bit. If you pay with Bit, upload a payment screenshot so the worker can confirm it.",
+    },
+    {
+      icon: Star,
+      title: "Rate Your Experience",
+      description:
+        "After the order is completed, leave a rating, comment, and optional photos to help future customers.",
     },
   ];
 
   return (
     <section className="py-20 px-6 bg-gradient-to-br from-blue-50 via-white to-cyan-50">
-      <div className="max-w-6xl mx-auto">
-        {/* Section header */}
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl mb-4 text-gray-900">
-            How It Works
+            How Washly Works
           </h2>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            Four simple steps to cleaner, fresher clothes
+            Book laundry help from trusted local workers in a few simple steps.
           </p>
         </div>
 
-        {/* Steps */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-8">
           {steps.map((step, index) => {
             const Icon = step.icon;
 
@@ -59,9 +69,7 @@ export default function HowItWorks() {
                     {index + 1}
                   </div>
 
-                  <h3 className="text-xl mb-3 text-gray-900">
-                    {step.title}
-                  </h3>
+                  <h3 className="text-xl mb-3 text-gray-900">{step.title}</h3>
 
                   <p className="text-gray-600 leading-relaxed text-sm">
                     {step.description}

@@ -97,6 +97,15 @@ exports.createRating = async (req, res) => {
         rated_worker: order.worker_id,
         score,
         comment: body.comment || null,
+
+        Photos: req.files?.length
+          ? {
+              create: req.files.map((file, index) => ({
+                image_url: `/uploads/ratings/${file.filename}`,
+                is_cover: index === 0,
+              })),
+            }
+          : undefined,
       },
       include: {
         Rater: {
@@ -263,9 +272,16 @@ exports.getWorkerRatings = async (req, res) => {
           ratings.length
         : 0;
 
-    // 4) Return ratings + summary
+    const ratingsWithPhotoUrls = ratings.map((rating) => ({
+      ...rating,
+      Photos: rating.Photos.map((photo) => ({
+        ...photo,
+        full_image_url: `${req.protocol}://${req.get("host")}${photo.image_url}`,
+      })),
+    }));
+
     return res.json({
-      ratings,
+      ratings: ratingsWithPhotoUrls,
       averageScore: Number(averageScore.toFixed(1)),
       totalRatings: ratings.length,
     });

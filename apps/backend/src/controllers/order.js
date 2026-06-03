@@ -321,9 +321,6 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
-// ---------------------------
-// GET ORDER BY ID
-// ---------------------------
 exports.getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -345,13 +342,12 @@ exports.getOrderById = async (req, res) => {
             user: true,
           },
         },
-        Rating: true,
+        Rating: {
+          include: {
+            Photos: true,
+          },
+        },
         PaymentProofs: true,
-        // Notifications: {
-        //   orderBy: {
-        //     created_at: "desc",
-        //   },
-        // },
       },
     });
 
@@ -369,7 +365,6 @@ exports.getOrderById = async (req, res) => {
     });
   }
 };
-
 // ---------------------------
 // UPDATE ORDER STATUS
 // ---------------------------
@@ -546,12 +541,11 @@ exports.getUserOrders = async (req, res) => {
             user: true,
           },
         },
-        Rating: true,
-        // Notifications: {
-        //   orderBy: {
-        //     created_at: "desc",
-        //   },
-        // },
+        Rating: {
+          include: {
+            Photos: true,
+          },
+        },
       },
     });
 

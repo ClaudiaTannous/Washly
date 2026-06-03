@@ -174,15 +174,16 @@ model Rating {
 }
 
 model RatingPhoto {
-  id        BigInt  @id @default(autoincrement())
-  rating_id BigInt
-  media_id  BigInt
-  is_cover  Boolean @default(false)
-  Rating    Rating  @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  id         BigInt   @id @default(autoincrement())
+  rating_id  BigInt
+  image_url  String
+  is_cover   Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  Rating Rating @relation(fields: [rating_id], references: [id], onDelete: Cascade)
 
   @@index([rating_id])
 }
-
 model OrderPaymentProof {
   id          BigInt   @id @default(autoincrement())
   order_id    BigInt

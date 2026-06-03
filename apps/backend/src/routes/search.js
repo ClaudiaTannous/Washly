@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../prisma");
-
+const { requireAuth } = require("../middlewares/auth");
 /* -----------------------------
    helpers
 ------------------------------ */
@@ -56,7 +56,7 @@ router.get("/search/cities", async (_req, res) => {
    If pickup_at exists -> apply availability filters
    If pickup_at missing -> return all workers in the city
 ------------------------------ */
-router.get("/search/workers", async (req, res) => {
+router.get("/search/workers", requireAuth, async (req, res) => {
   try {
     const {
       q,
@@ -116,10 +116,11 @@ router.get("/search/workers", async (req, res) => {
         .status(400)
         .json({ ok: false, error: "maxPrice must be a number" });
     }
-
+    const loggedInUserId = req.user?.userId ? BigInt(req.user.userId) : null;
     const where = {
       ...(idFilter ? { id: idFilter } : {}),
 
+      ...(loggedInUserId && !idFilter ? { id: { not: loggedInUserId } } : {}),
       ...(parseBool(is_professional) !== undefined
         ? { is_professional: parseBool(is_professional) }
         : {}),

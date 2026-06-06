@@ -612,8 +612,23 @@ console.log("RESULT CITIES", data.items.map((w) => w.profile?.city));
                         <button
                           key={c}
                           type="button"
-                          onClick={() => setCity(c)}
-                          className="px-4 py-2 rounded-full border border-sky-200 bg-sky-50 text-sky-700 text-sm hover:bg-sky-100 transition"
+onClick={() => {
+  const filters = { city: c };
+
+  setCity(c);
+  setPickupAt("");
+  setAdvancedFilters({});
+  setSubmittedFilters(filters);
+  setItems([]);
+  setNextCursor(null);
+  setError(null);
+  setFirstLoad(true);
+  setNoWorkersInCity(false);
+  setSameCityWorkers([]);
+  setAlternativeTimeMatches([]);
+
+  router.replace(`/workers?city=${encodeURIComponent(c)}`);
+}}                          className="px-4 py-2 rounded-full border border-sky-200 bg-sky-50 text-sky-700 text-sm hover:bg-sky-100 transition"
                         >
                           {c}
                         </button>

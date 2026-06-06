@@ -79,7 +79,7 @@ export default function WorkersSearchPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [currentWorkerId, setCurrentWorkerId] = useState(null);
 
-  const [submittedFilters, setSubmittedFilters] = useState({});
+  const [submittedFilters, setSubmittedFilters] = useState(null);
   const [items, setItems] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -209,16 +209,8 @@ export default function WorkersSearchPage() {
   }, []);
 
   const sortedItems = useMemo(() => {
-    return [...items]
-      .filter((worker) => {
-        if (!currentWorkerId) return true;
-        return String(worker.worker_id) !== String(currentWorkerId);
-      })
-      .sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0));
-    console.log("currentUser:", currentUser);
-    console.log("currentWorkerId:", currentWorkerId);
-    console.log("workers:", items);
-  }, [items, currentWorkerId]);
+  return [...items].sort((a, b) => (b.rating?.avg ?? 0) - (a.rating?.avg ?? 0));
+}, [items]);
 
   const isCityValid = city.trim().length > 0;
 
@@ -228,33 +220,38 @@ export default function WorkersSearchPage() {
     return f;
   }
 
-  useEffect(() => {
-    if (!city.trim()) {
-      setSubmittedFilters({});
-      setItems([]);
-      setNextCursor(null);
-      setError(null);
-      setFirstLoad(true);
-      setNoWorkersInCity(false);
-      setSameCityWorkers([]);
-      setAlternativeTimeMatches([]);
-      return;
-    }
+// useEffect(() => {
+//   const trimmedCity = city.trim();
 
-    const cityFromUrl = searchParams.get("city");
+//   if (!trimmedCity) {
+//     setSubmittedFilters(null);
+//     setItems([]);
+//     setNextCursor(null);
+//     setError(null);
+//     setFirstLoad(true);
+//     setNoWorkersInCity(false);
+//     setSameCityWorkers([]);
+//     setAlternativeTimeMatches([]);
+//     return;
+//   }
 
-    if (cityFromUrl) return;
+//   const cityFromUrl = searchParams.get("city");
 
-    setItems([]);
-    setNextCursor(null);
-    setError(null);
-    setFirstLoad(true);
-    setNoWorkersInCity(false);
-    setSameCityWorkers([]);
-    setAlternativeTimeMatches([]);
+//   if (cityFromUrl) return;
 
-    setSubmittedFilters({ city: city.trim() });
-  }, [city, searchParams]);
+//   const filters = { city: trimmedCity };
+
+//   setItems([]);
+//   setNextCursor(null);
+//   setError(null);
+//   setFirstLoad(true);
+//   setNoWorkersInCity(false);
+//   setSameCityWorkers([]);
+//   setAlternativeTimeMatches([]);
+//   setSubmittedFilters(filters);
+
+//   router.replace(`/workers?city=${encodeURIComponent(trimmedCity)}`);
+// }, [city, searchParamsString]);
 
   const onSearch = () => {
     if (!isCityValid) {
@@ -316,7 +313,7 @@ export default function WorkersSearchPage() {
 
   const load = useCallback(
     async (reset) => {
-      if (!submittedFilters) return;
+          if (!submittedFilters?.city) return;
       try {
         setLoading(true);
         setError(null);
@@ -333,6 +330,9 @@ export default function WorkersSearchPage() {
           submittedFilters,
           reset ? null : nextCursor,
         );
+        console.log("SUBMITTED FILTERS:", submittedFilters);
+console.log("DATA FROM API:", data);
+console.log("ITEMS:", data.items);
         console.log("FILTERS", submittedFilters);
 console.log("RESULT CITIES", data.items.map((w) => w.profile?.city));
         setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
@@ -392,11 +392,10 @@ console.log("RESULT CITIES", data.items.map((w) => w.profile?.city));
     [submittedFilters, nextCursor],
   );
 
-  useEffect(() => {
-    if (!submittedFilters) return;
-    load(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(submittedFilters)]);
+ useEffect(() => {
+  if (!submittedFilters?.city) return;
+  load(true);
+}, [JSON.stringify(submittedFilters)]);
 
   return (
     <div className="min-h-screen bg-[#EBF8FB] text-[13px]" dir="ltr">
@@ -552,6 +551,8 @@ console.log("RESULT CITIES", data.items.map((w) => w.profile?.city));
             {error}
           </div>
         )}
+
+        
 
         {sortedItems.length > 0 ? (
           <div className="flex flex-col gap-4">

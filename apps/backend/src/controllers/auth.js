@@ -38,12 +38,13 @@ exports.login = async (req, res) => {
       role,
     });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // only over HTTPS in prod
-      sameSite: "lax", // or "strict" if you want
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-    });
+   res.cookie("token", token, {
+  httpOnly: true,
+  secure: false,
+  sameSite: "lax",
+  path: "/",
+  maxAge: 24 * 60 * 60 * 1000,
+});
 
     return res.json({
       token,
@@ -90,6 +91,7 @@ exports.me = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
-  res.clearCookie("token");
-  return res.json({ message: "Logged out" });
+res.clearCookie("token", {
+  path: "/",
+});  return res.json({ message: "Logged out" });
 };

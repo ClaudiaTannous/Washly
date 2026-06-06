@@ -317,9 +317,9 @@ router.get("/search/workers", requireAuth, async (req, res) => {
       .filter(Boolean);
 
     const nextCursor =
-      workersRaw.length > 0
-        ? workersRaw[workersRaw.length - 1].id.toString()
-        : null;
+  workersRaw.length === take
+    ? workersRaw[workersRaw.length - 1].id.toString()
+    : null;
 
     res.json({ ok: true, data: { items: result, nextCursor } });
   } catch (err) {

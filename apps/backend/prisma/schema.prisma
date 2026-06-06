@@ -69,9 +69,8 @@ model ServiceCatalog {
   default_proximate_turnaround_hours Int?
   description                        String?
   delicate_fabric                    Boolean         @default(false)
-
-  WorkerServices                     WorkerService[]
   OrderServices                      OrderService[]
+  WorkerServices                     WorkerService[]
 }
 
 model WorkerService {
@@ -93,44 +92,35 @@ model Order {
   id                       BigInt              @id @default(autoincrement())
   customer_user_id         BigInt
   worker_id                BigInt
-
   pickup_city              String
   pickup_street            String
   pickup_building          Int?
   pickup_apartment_house   Int
   pickup_floor             Int?
-
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
   delivery_apartment_house Int
   delivery_floor           Int?
-
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
-
   created_at               DateTime            @default(now())
   updated_at               DateTime            @default(now())
-
   amount                   Int                 @default(0)
-  items_count              Int                 @default(0)
-  washes_count             Int                 @default(0)
   notes                    String?
-
-  payment_method           PaymentMethod       @default(CASH)
-  payment_status           PaymentStatus       @default(UNPAID)
+  items_count              Int                 @default(0)
   payment_confirmed_at     DateTime?
   payment_confirmed_by     BigInt?
   payment_notes            String?
-
+  payment_status           PaymentStatus       @default(UNPAID)
+  washes_count             Int                 @default(0)
   status                   OrderStatus         @default(REQUESTED)
-
+  payment_method           PaymentMethod       @default(CASH)
+  Notifications            Notification[]      @relation("OrderNotifications")
   Customer                 User                @relation("orders_as_customer", fields: [customer_user_id], references: [id], onDelete: Cascade)
   Worker                   Worker              @relation("orders_as_worker", fields: [worker_id], references: [id])
-
-  Services                 OrderService[]
-  Notifications            Notification[]      @relation("OrderNotifications")
   PaymentProofs            OrderPaymentProof[] @relation("OrderPaymentProof_Order")
+  Services                 OrderService[]
   Rating                   Rating?
 
   @@index([customer_user_id])
@@ -176,21 +166,20 @@ model Rating {
 model RatingPhoto {
   id         BigInt   @id @default(autoincrement())
   rating_id  BigInt
-  image_url  String
   is_cover   Boolean  @default(false)
   created_at DateTime @default(now())
-
-  Rating Rating @relation(fields: [rating_id], references: [id], onDelete: Cascade)
+  image_url  String
+  Rating     Rating   @relation(fields: [rating_id], references: [id], onDelete: Cascade)
 
   @@index([rating_id])
 }
+
 model OrderPaymentProof {
   id          BigInt   @id @default(autoincrement())
   order_id    BigInt
-  image_url   String
   uploaded_by BigInt
   created_at  DateTime @default(now())
-
+  image_url   String
   Order       Order    @relation("OrderPaymentProof_Order", fields: [order_id], references: [id], onDelete: Cascade)
   Uploader    User     @relation("OrderPaymentProof_User", fields: [uploaded_by], references: [id])
 
@@ -215,6 +204,16 @@ model Notification {
   @@index([type])
   @@index([is_read])
   @@index([created_at])
+}
+
+model OrderService {
+  order_id     BigInt
+  service_code String
+  price        Int
+  Order        Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  Service      ServiceCatalog @relation(fields: [service_code], references: [service_code])
+
+  @@id([order_id, service_code])
 }
 
 enum OrderStatus {
@@ -251,14 +250,4 @@ enum NotificationType {
 enum AIMessageRole {
   USER
   AI
-}
-model OrderService {
-  order_id     BigInt
-  service_code String
-  price        Int
-
-  Order   Order          @relation(fields: [order_id], references: [id], onDelete: Cascade)
-  Service ServiceCatalog @relation(fields: [service_code], references: [service_code])
-
-  @@id([order_id, service_code])
 }

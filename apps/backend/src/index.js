@@ -37,9 +37,14 @@ app.set("trust proxy", 1);
 /* ---------------------------------------------------
    CORS CONFIG — WITH COOKIES
 --------------------------------------------------- */
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://10.0.0.12:3000",
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_ORIGIN || "http://localhost:3000",
+    origin: allowedOrigins,
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization"],

@@ -333,6 +333,8 @@ export default function WorkersSearchPage() {
           submittedFilters,
           reset ? null : nextCursor,
         );
+        console.log("FILTERS", submittedFilters);
+console.log("RESULT CITIES", data.items.map((w) => w.profile?.city));
         setItems((prev) => (reset ? data.items : [...prev, ...data.items]));
         setNextCursor(data.nextCursor ?? null);
 

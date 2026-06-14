@@ -6,9 +6,6 @@ const {
   isExactMatch,
 } = require("../utils/searchAvailability");
 
-/* -----------------------------
-   helpers
------------------------------- */
 const parseBool = (v) => {
   if (v === undefined) return undefined;
   if (v === "true" || v === "1") return true;
@@ -23,8 +20,6 @@ const parseCsv = (v) => {
     .map((s) => s.trim())
     .filter(Boolean);
 };
-
-
 
 function shapeWorker(w, nextAvailableTime = null, matchType = "exact") {
   const avg =
@@ -70,13 +65,12 @@ function shapeWorker(w, nextAvailableTime = null, matchType = "exact") {
     })),
 
     match_type: matchType,
-    next_available_time: nextAvailableTime ? nextAvailableTime.toISOString() : null,
+    next_available_time: nextAvailableTime
+      ? nextAvailableTime.toISOString()
+      : null,
   };
 }
 
-/* -----------------------------
-   GET /api/search/cities
------------------------------- */
 router.get("/search/cities", async (_req, res) => {
   try {
     const rows = await prisma.user.findMany({
@@ -94,12 +88,6 @@ router.get("/search/cities", async (_req, res) => {
   }
 });
 
-/* -----------------------------
-   GET /api/search/workers
-   Required:
-   - city
-   - pickup_at (ISO datetime)
------------------------------- */
 router.get("/search/workers", async (req, res) => {
   try {
     const {
@@ -107,9 +95,8 @@ router.get("/search/workers", async (req, res) => {
       city,
       pickup_at,
 
-      // services
-      service_code, // legacy (single)
-      service_codes, // NEW (csv list)
+      service_code,
+      service_codes,
 
       is_professional,
       pickup,
@@ -127,7 +114,9 @@ router.get("/search/workers", async (req, res) => {
       return res.status(400).json({ ok: false, error: "city is required" });
     }
     if (!pickup_at || String(pickup_at).trim() === "") {
-      return res.status(400).json({ ok: false, error: "pickup_at is required" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "pickup_at is required" });
     }
 
     const pickupDate = new Date(pickup_at);
@@ -136,7 +125,6 @@ router.get("/search/workers", async (req, res) => {
         .status(400)
         .json({ ok: false, error: "pickup_at must be a valid datetime" });
     }
-
 
     const idFilter = worker_id ? BigInt(worker_id) : null;
 
@@ -150,14 +138,14 @@ router.get("/search/workers", async (req, res) => {
     const take = Math.min(Number(limit) || 12, 50);
 
     const maxPriceNum =
-      maxPrice !== undefined && maxPrice !== ""
-        ? Number(maxPrice)
-        : undefined;
+      maxPrice !== undefined && maxPrice !== "" ? Number(maxPrice) : undefined;
     if (maxPriceNum !== undefined && Number.isNaN(maxPriceNum)) {
-      return res.status(400).json({ ok: false, error: "maxPrice must be a number" });
+      return res
+        .status(400)
+        .json({ ok: false, error: "maxPrice must be a number" });
     }
 
-    const baseWhere  = {
+    const baseWhere = {
       ...(idFilter ? { id: idFilter } : {}),
 
       ...(parseBool(is_professional) !== undefined
@@ -172,7 +160,6 @@ router.get("/search/workers", async (req, res) => {
         ? { delivery_available: parseBool(delivery) }
         : {}),
 
-      // city is required => always filter it
       user: {
         city_name: { equals: String(city).trim(), mode: "insensitive" },
 
@@ -186,16 +173,17 @@ router.get("/search/workers", async (req, res) => {
               ],
             }
           : {}),
-      },     
+      },
 
-      // ✅ optional services filter (multi)
       ...(servicesWanted.length
         ? {
             Services: {
               some: {
                 service_code: { in: servicesWanted },
                 is_active: true,
-                ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
+                ...(maxPriceNum !== undefined
+                  ? { base_price: { lte: maxPriceNum } }
+                  : {}),
               },
             },
           }
@@ -214,8 +202,12 @@ router.get("/search/workers", async (req, res) => {
         Services: {
           where: {
             is_active: true,
-            ...(servicesWanted.length ? { service_code: { in: servicesWanted } } : {}),
-            ...(maxPriceNum !== undefined ? { base_price: { lte: maxPriceNum } } : {}),
+            ...(servicesWanted.length
+              ? { service_code: { in: servicesWanted } }
+              : {}),
+            ...(maxPriceNum !== undefined
+              ? { base_price: { lte: maxPriceNum } }
+              : {}),
           },
           include: { Service: true }, // ServiceCatalog via relation field "Service"
         },
@@ -223,11 +215,8 @@ router.get("/search/workers", async (req, res) => {
       },
     });
 
-    
-
     // Filter by min_notice_minutes (worker-specific notice)
     const now = new Date();
-  
 
     // Filter by max_orders_per_day (capacity)
     // Count scheduled_pickup on the pickup day per worker
@@ -256,63 +245,71 @@ router.get("/search/workers", async (req, res) => {
         ordersCountByWorker.set(key, (ordersCountByWorker.get(key) || 0) + 1);
       }
     }
-const minR =
-  minRating !== undefined && minRating !== "" ? Number(minRating) : undefined;
+    const minR =
+      minRating !== undefined && minRating !== ""
+        ? Number(minRating)
+        : undefined;
 
-if (minR !== undefined && Number.isNaN(minR)) {
-  return res.status(400).json({ ok: false, error: "minRating must be a number" });
-}
+    if (minR !== undefined && Number.isNaN(minR)) {
+      return res
+        .status(400)
+        .json({ ok: false, error: "minRating must be a number" });
+    }
 
-const workersAfterRating = workersRaw.filter((w) => {
-  const avg =
-    w.RatingsReceived.length > 0
-      ? w.RatingsReceived.reduce((sum, r) => sum + r.score, 0) /
-        w.RatingsReceived.length
-      : 0;
+    const workersAfterRating = workersRaw.filter((w) => {
+      const avg =
+        w.RatingsReceived.length > 0
+          ? w.RatingsReceived.reduce((sum, r) => sum + r.score, 0) /
+            w.RatingsReceived.length
+          : 0;
 
-  return minR === undefined || avg >= minR;
-});
+      return minR === undefined || avg >= minR;
+    });
 
-const matchedItems = workersAfterRating
-  .filter((w) => isExactMatch(w, pickupDate, now, ordersCountByWorker))
-  .map((w) => shapeWorker(w, pickupDate, "exact"));
+    const matchedItems = workersAfterRating
+      .filter((w) => isExactMatch(w, pickupDate, now, ordersCountByWorker))
+      .map((w) => shapeWorker(w, pickupDate, "exact"));
 
-  let alternativeItems = [];
+    let alternativeItems = [];
 
-if (matchedItems.length === 0) {
-  alternativeItems = workersAfterRating
-    .filter((w) => !isExactMatch(w, pickupDate, now, ordersCountByWorker))
-    .map((w) => {
-      const nextAvailableTime = getNextAvailableTime(w.Hours || [], pickupDate);
+    if (matchedItems.length === 0) {
+      alternativeItems = workersAfterRating
+        .filter((w) => !isExactMatch(w, pickupDate, now, ordersCountByWorker))
+        .map((w) => {
+          const nextAvailableTime = getNextAvailableTime(
+            w.Hours || [],
+            pickupDate,
+          );
 
-      if (!nextAvailableTime) return null;
+          if (!nextAvailableTime) return null;
 
-      return shapeWorker(w, nextAvailableTime, "alternative");
-    })
-    .filter(Boolean)
-    .sort(
-      (a, b) =>
-        new Date(a.next_available_time).getTime() -
-        new Date(b.next_available_time).getTime()
-    );
-}
+          return shapeWorker(w, nextAvailableTime, "alternative");
+        })
+        .filter(Boolean)
+        .sort(
+          (a, b) =>
+            new Date(a.next_available_time).getTime() -
+            new Date(b.next_available_time).getTime(),
+        );
+    }
 
     const nextCursor =
-      workersRaw.length > 0 ? workersRaw[workersRaw.length - 1].id.toString() : null;
+      workersRaw.length > 0
+        ? workersRaw[workersRaw.length - 1].id.toString()
+        : null;
 
-  res.json({
-  ok: true,
-  data: {
-    matchedItems,
-    alternativeItems,
-    meta: {
-      hasMatches: matchedItems.length > 0,
-      requestedCity: String(city).trim(),
-      requestedPickupAt: pickupDate.toISOString(),
-    },
-  },
-});
-
+    res.json({
+      ok: true,
+      data: {
+        matchedItems,
+        alternativeItems,
+        meta: {
+          hasMatches: matchedItems.length > 0,
+          requestedCity: String(city).trim(),
+          requestedPickupAt: pickupDate.toISOString(),
+        },
+      },
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, error: err.message });

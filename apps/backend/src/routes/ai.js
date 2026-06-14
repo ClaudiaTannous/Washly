@@ -1,4 +1,6 @@
 const express = require("express");
+const multer = require("multer");
+
 const {
   getOrCreateConversation,
   getConversationMessages,
@@ -7,13 +9,18 @@ const {
 
 const router = express.Router();
 
-// Get or create conversation for a worker
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
+
 router.get("/ai/worker/:workerId", getOrCreateConversation);
 
-// Get messages by conversation
 router.get("/ai/:conversationId/messages", getConversationMessages);
 
-// Send a message
-router.post("/ai/:conversationId/messages", sendMessage);
+router.post(
+  "/ai/:conversationId/messages",
+  upload.single("image"),
+  sendMessage,
+);
 
 module.exports = router;

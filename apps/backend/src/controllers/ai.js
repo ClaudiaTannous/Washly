@@ -65,7 +65,7 @@ exports.getConversationMessages = async (req, res) => {
         role: m.role,
         content: m.content,
         createdAt: m.createdAt,
-      }))
+      })),
     );
   } catch (error) {
     console.error("getConversationMessages error:", error);
@@ -79,13 +79,14 @@ exports.sendMessage = async (req, res) => {
   try {
     const { conversationId } = req.params;
     const { content } = req.body;
+    const image = req.file;
 
     if (!/^\d+$/.test(conversationId)) {
       return res.status(400).json({ error: "Invalid conversation id format" });
     }
 
-    if (!content || !content.trim()) {
-      return res.status(400).json({ error: "Missing content" });
+    if ((!content || !content.trim()) && !image) {
+      return res.status(400).json({ error: "Missing content or image" });
     }
 
     const convId = BigInt(conversationId);
@@ -98,40 +99,61 @@ exports.sendMessage = async (req, res) => {
       return res.status(404).json({ error: "Conversation not found" });
     }
 
-    // Save USER message
+    const userText = content?.trim() || "Please analyze this image.";
+
     await prisma.aIMessage.create({
       data: {
         conversationId: convId,
         role: "USER",
-        content: content.trim(),
+        content: image ? `${userText}\n[Image uploaded]` : userText,
       },
     });
 
-    // Load history
     const history = await prisma.aIMessage.findMany({
       where: { conversationId: convId },
       orderBy: { createdAt: "asc" },
       take: 20,
     });
 
-    // Call OpenAI
+    const openAIInput = [
+      {
+        role: "system",
+        content:
+          "You are Washly's Worker Assistant. Help the worker improve ratings, earnings, scheduling, and customer communication. Be concise and actionable.",
+      },
+      ...toOpenAIInput(history.slice(0, -1)),
+    ];
+
+    const currentUserContent = [
+      {
+        type: "input_text",
+        text: userText,
+      },
+    ];
+
+    if (image) {
+      const base64Image = image.buffer.toString("base64");
+
+      currentUserContent.push({
+        type: "input_image",
+        image_url: `data:${image.mimetype};base64,${base64Image}`,
+      });
+    }
+
+    openAIInput.push({
+      role: "user",
+      content: currentUserContent,
+    });
+
     const response = await openai.responses.create({
       model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content:
-            "You are Washly's Worker Assistant. Help the worker improve ratings, earnings, scheduling, and customer communication. Be concise and actionable.",
-        },
-        ...toOpenAIInput(history),
-      ],
+      input: openAIInput,
     });
 
     const aiText =
       (response.output_text || "").trim() ||
       "I couldn't generate a reply. Please try again.";
 
-    // Save AI message
     await prisma.aIMessage.create({
       data: {
         conversationId: convId,
@@ -142,6 +164,7 @@ exports.sendMessage = async (req, res) => {
 
     return res.status(201).json({
       reply: aiText,
+      imageReceived: Boolean(image),
     });
   } catch (error) {
     console.error("sendMessage error:", error);

@@ -8,6 +8,7 @@ import { getCurrentUser, getWorker } from "@/lib/apiClient";
 
 export default function AIAssistantPage() {
   const router = useRouter();
+
   const [workerId, setWorkerId] = useState(null);
   const [loading, setLoading] = useState(true);
 

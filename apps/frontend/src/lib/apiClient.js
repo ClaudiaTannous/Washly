@@ -266,10 +266,20 @@ export function getAIConversation(workerId) {
 }
 
 // Send message to AI
-export function sendAIMessage(conversationId, text) {
+export function sendAIMessage(conversationId, text, image) {
+  const formData = new FormData();
+
+  if (text) {
+    formData.append("content", text);
+  }
+
+  if (image) {
+    formData.append("image", image);
+  }
+
   return apiFetch(`/api/ai/${conversationId}/messages`, {
     method: "POST",
-    body: JSON.stringify({ content: text }),
+    body: formData,
   });
 }
 

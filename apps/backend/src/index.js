@@ -22,7 +22,7 @@ const serviceCatalogRoutes = require("./routes/serviceCatalog");
 const workerServiceRoutes = require("./routes/workerService");
 const ratingRoutes = require("./routes/ratings");
 const searchRoutes = require("./routes/search");
-const aiRoutes = require("./routes/Ai");
+const aiRoutes = require("./routes/ai");
 const notificationRoutes = require("./routes/notifications");
 const geoRoutes = require("./routes/geo");
 

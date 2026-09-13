@@ -24,6 +24,7 @@ const ratingRoutes = require("./routes/ratings");
 const searchRoutes = require("./routes/search");
 const aiRoutes = require("./routes/Ai");
 const notificationRoutes = require("./routes/notifications");
+const geoRoutes = require("./routes/geo");
 
 dotenv.config();
 
@@ -40,6 +41,12 @@ app.set("trust proxy", 1);
 const allowedOrigins = [
   "http://localhost:3000",
   "http://10.0.0.12:3000",
+  // Comma-separated list of extra origins (e.g. your deployed Vercel
+  // frontend URL) — set FRONTEND_URL in the backend's environment
+  // variables instead of editing this file again after every deploy.
+  ...(process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(",").map((s) => s.trim())
+    : []),
 ];
 
 app.use(
@@ -128,6 +135,7 @@ app.use("/api", searchRoutes);
 app.use("/api", ratingRoutes);
 app.use("/api", notificationRoutes);
 app.use("/api", aiRoutes);
+app.use("/api", geoRoutes);
 
 /* ---------------------------------------------------
    START SERVER

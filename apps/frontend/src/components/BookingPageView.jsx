@@ -129,6 +129,8 @@ export default function BookingPageView() {
     pickupBuilding: "",
     pickupApartment: "",
     pickupFloor: "",
+    pickupLat: null,
+    pickupLng: null,
 
     sameAsPickup: true,
 
@@ -137,12 +139,16 @@ export default function BookingPageView() {
     deliveryBuilding: "",
     deliveryApartment: "",
     deliveryFloor: "",
+    deliveryLat: null,
+    deliveryLng: null,
     selectedServices: [],
     paymentMethod: "cash",
     notes: "",
   });
 
   const [errors, setErrors] = useState({});
+  const [locating, setLocating] = useState(null); // "pickup" | "delivery" | null
+  const [locateError, setLocateError] = useState({ pickup: "", delivery: "" });
   const [submitting, setSubmitting] = useState(false);
   const [successModalOpen, setSuccessModalOpen] = useState(false);
   const [createdOrder, setCreatedOrder] = useState(null);
@@ -178,8 +184,13 @@ export default function BookingPageView() {
     // If none exist, fall back to a list so the dropdown isn't empty:
     if (s.size === 0) FALLBACK_CITIES.forEach((c) => s.add(c));
 
+    // A GPS-resolved city may not be in the list above — make sure the
+    // <select> still has a matching option so the picked value shows up.
+    if (form.pickupCity) s.add(form.pickupCity);
+    if (form.deliveryCity) s.add(form.deliveryCity);
+
     return Array.from(s);
-  }, [cityFromSearch, workerCity]);
+  }, [cityFromSearch, workerCity, form.pickupCity, form.deliveryCity]);
 
   // fetch worker + business hours
   useEffect(() => {
@@ -261,6 +272,8 @@ export default function BookingPageView() {
       deliveryBuilding: prev.pickupBuilding,
       deliveryApartment: prev.pickupApartment,
       deliveryFloor: prev.pickupFloor,
+      deliveryLat: prev.pickupLat,
+      deliveryLng: prev.pickupLng,
     }));
   }, [
     form.sameAsPickup,
@@ -269,11 +282,77 @@ export default function BookingPageView() {
     form.pickupBuilding,
     form.pickupApartment,
     form.pickupFloor,
+    form.pickupLat,
+    form.pickupLng,
   ]);
 
   function setField(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: "" }));
+  }
+
+  // GPS autofill: gets the browser's current position, reverse-geocodes it,
+  // and fills the same manual address fields (which stay editable).
+  function useMyLocation(kind /* "pickup" | "delivery" */) {
+    if (!navigator.geolocation) {
+      setLocateError((prev) => ({
+        ...prev,
+        [kind]: "Geolocation is not supported by this browser",
+      }));
+      return;
+    }
+
+    setLocating(kind);
+    setLocateError((prev) => ({ ...prev, [kind]: "" }));
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+
+        try {
+          const res = await fetch(
+            `${API_BASE}/api/geo/reverse?lat=${latitude}&lng=${longitude}`,
+          );
+
+          if (!res.ok) throw new Error("Could not resolve address");
+
+          const data = await res.json();
+
+          setForm((prev) => ({
+            ...prev,
+            [`${kind}City`]: data.city || prev[`${kind}City`],
+            [`${kind}Street`]: data.street || prev[`${kind}Street`],
+            [`${kind}Building`]: data.building || prev[`${kind}Building`],
+            [`${kind}Lat`]: latitude,
+            [`${kind}Lng`]: longitude,
+          }));
+
+          setErrors((prev) => ({
+            ...prev,
+            [`${kind}City`]: "",
+            [`${kind}Street`]: "",
+          }));
+        } catch (e) {
+          setLocateError((prev) => ({
+            ...prev,
+            [kind]: e.message || "Could not resolve your address",
+          }));
+        } finally {
+          setLocating(null);
+        }
+      },
+      (error) => {
+        setLocating(null);
+        setLocateError((prev) => ({
+          ...prev,
+          [kind]:
+            error.code === error.PERMISSION_DENIED
+              ? "Location permission denied"
+              : "Could not get your current location",
+        }));
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
   }
 
   function validateStep(stepToValidate = step) {
@@ -354,12 +433,16 @@ export default function BookingPageView() {
       pickupBuilding: "",
       pickupApartment: "",
       pickupFloor: "",
+      pickupLat: null,
+      pickupLng: null,
       sameAsPickup: true,
       deliveryCity: chosen,
       deliveryStreet: "",
       deliveryBuilding: "",
       deliveryApartment: "",
       deliveryFloor: "",
+      deliveryLat: null,
+      deliveryLng: null,
       paymentMethod: "cash",
       notes: "",
     });
@@ -438,6 +521,8 @@ export default function BookingPageView() {
           building: toNumberOrNull(form.pickupBuilding),
           apartmentHouse: toRequiredNumber(form.pickupApartment),
           floor: toNumberOrNull(form.pickupFloor),
+          lat: form.pickupLat,
+          lng: form.pickupLng,
         },
 
         delivery: {
@@ -452,6 +537,8 @@ export default function BookingPageView() {
           floor: form.sameAsPickup
             ? toNumberOrNull(form.pickupFloor)
             : toNumberOrNull(form.deliveryFloor),
+          lat: form.sameAsPickup ? form.pickupLat : form.deliveryLat,
+          lng: form.sameAsPickup ? form.pickupLng : form.deliveryLng,
         },
 
         scheduledPickup: form.pickupAt,
@@ -801,7 +888,41 @@ export default function BookingPageView() {
               {step === 3 && (
                 <div className="space-y-10">
                   <section>
-                    <h2 className="text-2xl font-bold">Pickup address</h2>
+                    <div className="flex items-center justify-between flex-wrap gap-3">
+                      <h2 className="text-2xl font-bold">Pickup address</h2>
+                      <button
+                        type="button"
+                        onClick={() => useMyLocation("pickup")}
+                        disabled={locating === "pickup"}
+                        className="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        {locating === "pickup"
+                          ? "Locating..."
+                          : "📍 Use my current location"}
+                      </button>
+                    </div>
+                    {locateError.pickup && (
+                      <div className="mt-2 text-sm text-red-600">
+                        {locateError.pickup}
+                      </div>
+                    )}
+                    {form.pickupLat != null && (
+                      <div className="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>
+                          {form.pickupStreet
+                            ? "Location captured — please review the fields below."
+                            : "We found your city automatically, but couldn't determine your exact street. Please fill it in below — your exact GPS position is still saved for the worker."}
+                        </span>
+                        <a
+                          href={`https://www.openstreetmap.org/?mlat=${form.pickupLat}&mlon=${form.pickupLng}#map=18/${form.pickupLat}/${form.pickupLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline whitespace-nowrap"
+                        >
+                          View captured pin on map ↗
+                        </a>
+                      </div>
+                    )}
 
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                       <Field label="City" required error={errors.pickupCity}>
@@ -876,19 +997,53 @@ export default function BookingPageView() {
                   </section>
 
                   <section>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-3">
                       <h2 className="text-2xl font-bold">Delivery address</h2>
-                      <label className="flex items-center gap-2 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={form.sameAsPickup}
-                          onChange={(e) =>
-                            setField("sameAsPickup", e.target.checked)
-                          }
-                        />
-                        Same as pickup
-                      </label>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => useMyLocation("delivery")}
+                          disabled={locating === "delivery" || form.sameAsPickup}
+                          className="px-4 py-2 rounded-xl border border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-50 disabled:opacity-50"
+                        >
+                          {locating === "delivery"
+                            ? "Locating..."
+                            : "📍 Use my current location"}
+                        </button>
+                        <label className="flex items-center gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={form.sameAsPickup}
+                            onChange={(e) =>
+                              setField("sameAsPickup", e.target.checked)
+                            }
+                          />
+                          Same as pickup
+                        </label>
+                      </div>
                     </div>
+                    {locateError.delivery && (
+                      <div className="mt-2 text-sm text-red-600">
+                        {locateError.delivery}
+                      </div>
+                    )}
+                    {form.deliveryLat != null && !form.sameAsPickup && (
+                      <div className="mt-2 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>
+                          {form.deliveryStreet
+                            ? "Location captured — please review the fields below."
+                            : "We found your city automatically, but couldn't determine your exact street. Please fill it in below — your exact GPS position is still saved for the worker."}
+                        </span>
+                        <a
+                          href={`https://www.openstreetmap.org/?mlat=${form.deliveryLat}&mlon=${form.deliveryLng}#map=18/${form.deliveryLat}/${form.deliveryLng}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 underline whitespace-nowrap"
+                        >
+                          View captured pin on map ↗
+                        </a>
+                      </div>
+                    )}
 
                     <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
                       <Field

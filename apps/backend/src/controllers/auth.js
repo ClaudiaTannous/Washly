@@ -38,13 +38,20 @@ exports.login = async (req, res) => {
       role,
     });
 
-   res.cookie("token", token, {
-  httpOnly: true,
-  secure: false,
-  sameSite: "lax",
-  path: "/",
-  maxAge: 24 * 60 * 60 * 1000,
-});
+    const isProd = process.env.NODE_ENV === "production";
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      // Frontend and backend live on different domains in production
+      // (e.g. Vercel + Render), so the cookie must be SameSite=None and
+      // Secure there or the browser will refuse to send it cross-site.
+      // Locally both run on http://localhost, where Secure cookies are
+      // rejected, so we fall back to Lax + non-secure.
+      secure: isProd,
+      sameSite: isProd ? "none" : "lax",
+      path: "/",
+      maxAge: 24 * 60 * 60 * 1000,
+    });
 
     return res.json({
       token,
@@ -91,7 +98,14 @@ exports.me = async (req, res) => {
 };
 
 exports.logout = (req, res) => {
-res.clearCookie("token", {
-  path: "/",
-});  return res.json({ message: "Logged out" });
+  const isProd = process.env.NODE_ENV === "production";
+
+  res.clearCookie("token", {
+    path: "/",
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
+  });
+
+  return res.json({ message: "Logged out" });
 };

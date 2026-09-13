@@ -97,11 +97,15 @@ model Order {
   pickup_building          Int?
   pickup_apartment_house   Int
   pickup_floor             Int?
+  pickup_lat               Float?
+  pickup_lng               Float?
   delivery_city            String
   delivery_street          String
   delivery_building        Int?
   delivery_apartment_house Int
   delivery_floor           Int?
+  delivery_lat             Float?
+  delivery_lng             Float?
   scheduled_pickup         DateTime?
   scheduled_dropoff        DateTime?
   created_at               DateTime            @default(now())

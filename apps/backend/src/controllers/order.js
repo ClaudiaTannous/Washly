@@ -214,12 +214,16 @@ exports.createOrder = async (req, res) => {
         pickup_building: body.pickup.building ?? null,
         pickup_apartment_house: body.pickup.apartmentHouse ?? 0,
         pickup_floor: body.pickup.floor ?? null,
+        pickup_lat: body.pickup.lat ?? null,
+        pickup_lng: body.pickup.lng ?? null,
 
         delivery_city: body.delivery.city,
         delivery_street: body.delivery.street,
         delivery_building: body.delivery.building ?? null,
         delivery_apartment_house: body.delivery.apartmentHouse ?? 0,
         delivery_floor: body.delivery.floor ?? null,
+        delivery_lat: body.delivery.lat ?? null,
+        delivery_lng: body.delivery.lng ?? null,
 
         scheduled_pickup: pickupDate,
         scheduled_dropoff: body.scheduledDropoff

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
@@ -63,7 +63,7 @@ function getWorkerStreet(worker) {
   );
 }
 
-export default function WorkerGuestProfilePage() {
+function WorkerGuestProfilePageInner() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -495,6 +495,14 @@ export default function WorkerGuestProfilePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function WorkerGuestProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkerGuestProfilePageInner />
+    </Suspense>
   );
 }
 

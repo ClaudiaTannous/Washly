@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import BookingPageView from "@/components/BookingPageView";
 
@@ -45,7 +45,7 @@ async function fetchJson(url, options) {
   return data;
 }
 
-export default function BookPage() {
+function BookPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
 
@@ -413,5 +413,13 @@ export default function BookPage() {
       goBack={goBack}
       handleSubmit={handleSubmit}
     />
+  );
+}
+
+export default function BookPage() {
+  return (
+    <Suspense fallback={null}>
+      <BookPageInner />
+    </Suspense>
   );
 }

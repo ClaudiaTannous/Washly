@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  Suspense,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import SearchFilters from "@/components/ui/SearchFilters";
 import WorkerCard from "@/components/ui/WorkerCard";
@@ -60,7 +67,7 @@ function buildAlternativePickupTimes(originalPickupAt) {
   ];
 }
 
-export default function WorkersSearchPage() {
+function WorkersSearchPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
@@ -791,5 +798,13 @@ onClick={() => {
         )}
       </div>
     </div>
+  );
+}
+
+export default function WorkersSearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <WorkersSearchPageInner />
+    </Suspense>
   );
 }

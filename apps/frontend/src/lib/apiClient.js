@@ -1,6 +1,7 @@
 "use client"; // IMPORTANT: apiClient must run on the client side
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 /* -----------------------------------------------------
    UNIVERSAL API WRAPPER

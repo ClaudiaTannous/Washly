@@ -5,7 +5,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import BookingPageView from "@/components/BookingPageView";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 const ISRAEL_CITIES = [
   "Jerusalem",

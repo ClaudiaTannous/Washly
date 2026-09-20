@@ -15,7 +15,7 @@ import ModernDateTimePicker from "@/components/ui/ModernDateTimePicker";
 import { searchWorkers } from "@/lib/apiClient";
 
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
 async function fetchWorkers(filters, cursor) {
   const params = new URLSearchParams();

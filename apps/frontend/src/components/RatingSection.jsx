@@ -13,6 +13,9 @@ import {
   SelectValue,
 } from "./ui/select";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 /* -----------------------------------------------------
    RATING SECTION
 ----------------------------------------------------- */
@@ -223,7 +226,7 @@ function ReviewCard({ review }) {
                     photo.full_image_url ||
                     (photo.image_url?.startsWith("http")
                       ? photo.image_url
-                      : `http://localhost:5000${photo.image_url}`);
+                      : `${API_BASE_URL}${photo.image_url}`);
 
                   return (
                     <button

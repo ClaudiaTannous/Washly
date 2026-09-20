@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { Camera } from "lucide-react";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
 export default function WorkerAvatar({
   workerName,
   imageUrl,
@@ -15,7 +18,7 @@ export default function WorkerAvatar({
     imageUrl && imageUrl.startsWith("http")
       ? imageUrl
       : imageUrl
-        ? `http://localhost:5000${imageUrl}`
+        ? `${API_BASE_URL}${imageUrl}`
         : "";
 
   const showImage = imageSrc && !imageError;
